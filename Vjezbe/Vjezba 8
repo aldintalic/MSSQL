@@ -1,0 +1,140 @@
+--1
+CREATE DATABASE TESTIRANJE ON PRIMARY(
+	NAME=Test_dat, 
+	FILENAME='C:\BP2\Data\Tala.mdf', 
+	SIZE=5 MB, 
+	MAXSIZE=UNLIMITED, 
+	FILEGROWTH=10%
+),
+(	NAME=Test_sek, 
+	FILENAME='C:\BP2\Data\Tala_sek.ndf', 
+	SIZE=5 MB, 
+	MAXSIZE=UNLIMITED, 
+	FILEGROWTH=10%
+)
+
+LOG ON(
+	NAME=Test_log, 
+	FILENAME='C:\BP2\Log\Tala_log.ldf',
+	SIZE=2 MB, 
+	MAXSIZE=UNLIMITED, 
+	FILEGROWTH=5%
+)
+
+--2
+USE TESTIRANJE
+
+CREATE TABLE Studenti(
+StudentID int IDENTITY(170001, 1) CONSTRAINT PK_StudentID PRIMARY KEY,
+Ime varchar(15) NOT NULL,
+Prezime varchar(20) NOT NULL,
+JMBG varchar(13) NOT NULL CONSTRAINT UQ_JMBG UNIQUE CHECK(LEN(JMBG)=13),
+DatumRod date NOT NULL,
+Email varchar(40) NULL CONSTRAINT UQ_Email UNIQUE
+)
+
+--3
+CREATE TABLE Testovi(
+TestID int IDENTITY(1,1) CONSTRAINT PK_Testovi PRIMARY KEY,
+Datum datetime NOT NULL,
+Naziv varchar(50) NOT NULL,
+Oznaka varchar(10) NOT NULL CONSTRAINT UQ_Oznaka UNIQUE,
+Oblast varchar(50) NOT NULL,
+MaksBrojBod int NOT NULL
+)	
+
+--4
+CREATE TABLE RezultatiTesta(
+Polozio bit NOT NULL,
+OsvBodovi decimal(18,2) NOT NULL,
+Napomena varchar(100) NULL,
+StudentID int NOT NULL,
+TestID int NOT NULL,
+CONSTRAINT PK_RezultatiTesta PRIMARY KEY (StudentID, TestID),
+CONSTRAINT FK_RezultatiTesta_Studenti FOREIGN KEY (StudentID) REFERENCES Studenti (StudentID),
+CONSTRAINT FK_RezultatiTesta_Testovi FOREIGN KEY (TestID) REFERENCES Testovi (TestID)
+)
+
+--5
+CREATE TABLE Gradovi(
+GradID int IDENTITY(1,1) CONSTRAINT PK_Gradovi PRIMARY KEY,
+NazivGrada nvarchar(50) NOT NULL
+)
+
+ALTER TABLE Studenti
+ADD GradID int NULL CONSTRAINT FK_Studenti_Gradovi FOREIGN KEY REFERENCES Gradovi (GradID),
+	Adresa nvarchar(100) NULL
+
+--6
+INSERT INTO Studenti
+	(Ime, Prezime, JMBG, Email)
+SELECT TOP 10 P.FirstName, P.LastName, REPLACE(RIGHT(C.rowguid, 13),'-',0), E.EmailAddress
+FROM AdventureWorks2014.Person.Person P JOIN AdventureWorks2014.Person.EmailAddress E
+	ON P.BusinessEntityID=E.BusinessEntityID JOIN AdventureWorks2014.Sales.Customer C
+	ON P.BusinessEntityID=C.PersonID
+
+--7
+INSERT INTO Testovi
+VALUES
+(CONVERT(datetime,2015-06-05), 'MS Access', 'MSACC1', 'Baze podataka', 50),
+(CONVERT(datetime,2015-09-06), 'SQL Server', 'SQLS1', 'Baze podataka', 70),
+(GETDATE(), 'ASP.NET', 'ASPNET1', 'Web programiranje', 80)
+
+INSERT INTO RezultatiTesta (StudentID, TestID, Polozio, OsvBodovi)
+VALUES (170003, 1, 1, 42),
+	   (170004, 1, 0, 18),
+	   (170005, 1, 1, 26),
+	   (170004, 2, 1, 68),
+	   (170005, 2, 0, 20),
+	   (170004, 3, 1, 72),
+	   (170005, 3, 1, 67),
+	   (170006, 3, 0, 27),
+	   (170007, 3, 1, 72),
+	   (170008, 3, 0, 38)
+
+SELECT *
+FROM RezultatiTesta
+
+--8
+SELECT S.Ime, S.Prezime, S.JMBG, 
+	   T.Datum, T.Naziv, T.Oznaka, T.Oblast, T.MaksBrojBod, 
+	   RT.Polozio, RT.OsvBodovi, CONCAT(CONVERT(DECIMAL(18,2),ROUND(RT.OsvBodovi/T.MaksBrojBod*100,2)),' %') AS OsvojeniProcenat
+FROM RezultatiTesta RT JOIN Studenti S
+	ON RT.StudentID=S.StudentID JOIN Testovi T
+	ON RT.TestID=T.TestID
+WHERE T.Oznaka='ASPNET1'
+
+--9
+SELECT T.Naziv, T.Datum,
+		(SELECT COUNT(StudentID) FROM RezultatiTesta WHERE Polozio=1 AND TestID=T.TestID) AS UkupnoPolozenih,
+		(SELECT COUNT(StudentID) FROM RezultatiTesta WHERE Polozio=0 AND TestID=T.TestID) AS UkupnoNepolozenih
+FROM Testovi T
+WHERE (SELECT COUNT(StudentID) FROM RezultatiTesta WHERE Polozio=1 AND TestID=T.TestID) > 1
+
+--10
+UPDATE RezultatiTesta
+SET OsvBodovi+=5
+FROM Testovi T JOIN RezultatiTesta RT
+	 ON T.TestID=RT.TestID
+WHERE T.Oznaka='ASPNET1' AND RT.Polozio=1
+
+SELECT *
+FROM RezultatiTesta
+
+--11
+DELETE FROM RezultatiTesta
+FROM RezultatiTesta RT JOIN Testovi T
+	ON RT.TestID=T.TestID
+WHERE Oznaka='MSACC1'
+
+SELECT *
+FROM RezultatiTesta
+
+--12
+ALTER TABLE Studenti
+DROP CONSTRAINT FK_Studenti_Gradovi
+
+ALTER TABLE Studenti
+DROP COLUMN GradID, Adresa
+
+DROP TABLE Gradovi
