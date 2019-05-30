@@ -1,0 +1,61 @@
+USE prihodi
+
+--1
+SELECT OsobaID, PrezIme, Ime,PoslodavacID
+FROM Osoba
+
+--2
+SELECT OsobaID,PrezIme,Ime
+FROM Osoba
+WHERE Spol='M'
+
+--3
+SELECT *
+FROM PolisaOsiguranja
+WHERE VrijednostPolise>750
+ORDER BY VrijednostPolise DESC
+
+--4
+SELECT RedovniPrihodiID, Neto
+FROM RedovniPrihodi
+WHERE Penzijsko IS NOT NULL AND Neto >= 600
+ORDER BY Neto DESC
+
+--5
+SELECT VanredniPrihodiID, IznosVanrednogPrihoda, DatumObracuna
+FROM VanredniPrihodi
+WHERE DatumObracuna>='2016/1/1' AND DatumObracuna<='2016/6/30'
+ORDER BY DatumObracuna
+
+--6
+SELECT RedovniPrihodiID, Neto
+FROM RedovniPrihodi 
+WHERE KlasaRedPrihoda_Neto=3 AND  Mjesec>=7 AND Mjesec<=12 AND Godina=2017
+ORDER BY Neto 
+
+--7
+SELECT RedovniPrihodiID, (Bruto-Neto) AS Doprinos
+FROM RedovniPrihodi
+WHERE (Bruto-Neto) BETWEEN 300 AND 400
+ORDER BY 2 
+
+--8
+SELECT VanredniPrihodiID, IznosVanrednogPrihoda, 'PREKORACENJE'  AS Poruka
+FROM VanredniPrihodi
+WHERE DATEDIFF(DD,DatumObracuna,DatumIsplate) > 3
+
+--9
+SELECT PolisaID, VrijednostPolise, IznosRate, DatumIzdavanja
+FROM PolisaOsiguranja
+WHERE TipOsiguranjaID=2 AND (IznosRate>75 OR DatumIzdavanja BETWEEN '2018/10/1' AND'2018/12/31')
+ORDER BY DatumIzdavanja
+
+--10
+SELECT RedovniPrihodiID, (Zdravstveno+Penzijsko) AS Doprinos
+FROM RedovniPrihodi
+WHERE (Zdravstveno+Penzijsko) BETWEEN 750 AND 1000 AND Mjesec>=7 AND Mjesec<=12
+ORDER BY 2 DESC
+
+
+
+
