@@ -1,0 +1,147 @@
+--1
+USE AdventureWorks2014
+
+CREATE VIEW HumanResources.view_Employees WITH SCHEMABINDING AS
+SELECT E.BusinessEntityID AS ZaposlenikID, P.FirstName AS Ime, P.LastName AS Prezime
+FROM HumanResources.Employee E JOIN Person.Person P
+	ON E.BusinessEntityID = P.BusinessEntityID
+
+SELECT *
+FROM HumanResources.view_Employees
+ORDER BY ZaposlenikID
+
+--2
+CREATE TABLE Uposlenik(
+UposlenikID int,
+NacionalniID varchar(15) NOT NULL,
+LoginID varchar(256) NOT NULL,
+RadnoMjesto varchar(50) NOT NULL
+)
+
+CREATE TABLE Osoba(
+OsobaID int,
+VrstaUposlenika char(2) NOT NULL,
+Prezime varchar(50) NOT NULL,
+Ime varchar(50) NOT NULL
+)
+
+INSERT INTO Uposlenik
+SELECT E.BusinessEntityID, E.NationalIDNumber, E.LoginID, E.JobTitle
+FROM HumanResources.Employee E
+WHERE E.JobTitle LIKE '%Manager%'
+
+INSERT INTO Osoba
+SELECT P.BusinessEntityID, P.PersonType, P.LastName, P.FirstName
+FROM Person.Person P
+WHERE P.PersonType='EM'
+
+--3
+CREATE VIEW dbo.view_UposlenikOsoba WITH SCHEMABINDING AS
+SELECT U.UposlenikID AS ID,
+	   O.Prezime AS PREZIME, 
+	   O.Ime AS IME,
+	   U.NacionalniID AS NACIONALNI_ID,
+	   U.LoginID AS LOGIN_ID,
+	   U.RadnoMjesto AS RADNO_MJESTO,
+	   O.VrstaUposlenika AS VRSTA_UPOSLENIKA
+FROM dbo.Uposlenik U JOIN dbo.Osoba O
+	ON U.UposlenikID=O.OsobaID
+
+SELECT *
+FROM DBO.view_UposlenikOsoba
+
+--4
+USE NORTHWND
+
+CREATE VIEW view_Employee AS
+SELECT E.LastName + ' ' + E.FirstName AS ImePrezime,
+	   T.TerritoryDescription, R.RegionDescription, DATEDIFF(YY,E.BirthDate,GETDATE()) AS Godine
+FROM Employees E JOIN EmployeeTerritories ET
+	ON E.EmployeeID = ET.EmployeeID JOIN Territories T
+	ON ET.TerritoryID = T.TerritoryID JOIN Region R
+	ON T.RegionID = R.RegionID
+WHERE DATEDIFF(YY,E.BirthDate,GETDATE()) > 30
+
+SELECT *
+FROM view_Employee
+
+--5
+CREATE VIEW view_Employee1 AS
+SELECT E.FirstName + ' ' + E.LastName AS ImePrezime,
+	   OD.UnitPrice AS Cijena, OD.Quantity AS Kolicina, OD.UnitPrice*(1-OD.Discount)*OD.Quantity AS Ukupno
+FROM Employees E JOIN Orders O
+	ON E.EmployeeID = O.EmployeeID JOIN [Order Details] OD
+	ON O.OrderID = OD.OrderID
+WHERE YEAR(O.OrderDate) = 1997
+
+SELECT *
+FROM view_Employee1
+
+--6
+CREATE VIEW view_Employee2 AS
+SELECT E.FirstName AS Ime, SUM(OD.UnitPrice*(1-OD.Discount)*OD.Quantity) AS Ukupno
+FROM Employees E JOIN Orders O
+	ON E.EmployeeID = O.EmployeeID JOIN [Order Details] OD
+	ON O.OrderID = OD.OrderID
+WHERE YEAR(O.OrderDate) = 1997
+GROUP BY E.FirstName
+HAVING SUM(OD.UnitPrice*(1-OD.Discount)*OD.Quantity) > 50000
+
+SELECT *
+FROM view_Employee2
+ORDER BY 1
+
+--7
+CREATE VIEW view_Categories AS
+SELECT S.CompanyName AS NazivDobavljaca, S.City AS Grad, S.Country AS Drzava, P.ProductName AS NazivProizvoda
+FROM Categories C JOIN Products P
+	ON C.CategoryID = P.CategoryID JOIN Suppliers S
+	ON P.SupplierID = S.SupplierID
+WHERE C.Description LIKE '%drinks%' AND P.UnitsInStock > 30
+
+SELECT *
+FROM view_Categories
+
+--8
+USE AdventureWorks2014
+
+SELECT *
+FROM view_UposlenikOsoba
+
+CREATE UNIQUE CLUSTERED INDEX IX_UpOs
+ON dbo.view_UposlenikOsoba (ID)
+
+--9
+CREATE TABLE UposlenikTemp (
+UposlenikID int,
+NacionalniID varchar(15),
+LoginID varchar(256),
+RadnoMjesto varchar(50)
+)
+
+INSERT INTO UposlenikTemp
+SELECT VUO.ID, VUO.NACIONALNI_ID, VUO.LOGIN_ID, VUO.RADNO_MJESTO
+FROM view_UposlenikOsoba VUO
+WHERE VUO.RADNO_MJESTO LIKE '%Manager%'
+
+SELECT *
+FROM UposlenikTemp
+
+--10
+CREATE TABLE UposlenikZDK(
+UposlenikID int NOT NULL,
+NacionalniID varchar(15) NOT NULL,
+LoginID varchar(256) NOT NULL,
+RadnoMjesto varchar(50) NOT NULL,
+Kanton smallint NOT NULL CONSTRAINT CK_Kanton_K1 CHECK (Kanton = 1)
+CONSTRAINT PK_Kantoni_K1 PRIMARY KEY (UposlenikID, Kanton)
+)
+
+CREATE TABLE UposlenikHNK(
+UposlenikID int NOT NULL,
+NacionalniID varchar(15) NOT NULL,
+LoginID varchar(256) NOT NULL,
+RadnoMjesto varchar(50) NOT NULL,
+Kanton smallint NOT NULL CONSTRAINT CK_Kanton_K2 CHECK (Kanton = 2)
+CONSTRAINT PK_Kantoni_K2 PRIMARY KEY (UposlenikID, Kanton)
+)
