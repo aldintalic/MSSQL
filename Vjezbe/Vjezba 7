@@ -1,0 +1,231 @@
+--1
+USE NORTHWND
+
+SELECT E.FirstName+E.LastName AS ImePrezime, T.TerritoryDescription, R.RegionDescription
+FROM Employees AS E JOIN EmployeeTerritories AS ET
+	ON E.EmployeeID=ET.EmployeeID JOIN Territories AS T
+	ON ET.TerritoryID=T.TerritoryID JOIN Region AS R
+	ON T.RegionID=R.RegionID
+WHERE DATEDIFF(YY,E.BirthDate, GETDATE()) > 30 
+
+--2
+SELECT E.FirstName+E.LastName AS ImePrezime, OD.UnitPrice, OD.Quantity, 
+		(OD.UnitPrice-OD.UnitPrice*OD.Discount)*OD.Quantity AS Ukupno
+FROM Employees AS E JOIN Orders AS O
+	ON E.EmployeeID=O.EmployeeID JOIN [Order Details] AS OD
+	ON O.OrderID=OD.OrderID
+WHERE YEAR(O.OrderDate)=1997
+ORDER BY 4
+
+--3
+SELECT E.FirstName, ROUND(SUM((OD.UnitPrice-OD.UnitPrice*OD.Discount)*OD.Quantity),2) AS Ukupno
+FROM Employees AS E JOIN Orders AS O
+	ON E.EmployeeID=O.EmployeeID JOIN [Order Details] AS OD
+	ON O.OrderID=OD.OrderID
+WHERE YEAR(O.OrderDate)=1997
+GROUP BY E.FirstName
+HAVING SUM((OD.UnitPrice-OD.UnitPrice*OD.Discount)*OD.Quantity) > 50000
+ORDER BY E.FirstName
+
+--4
+SELECT S.CompanyName, S.City, S.Country, P.ProductName
+FROM Categories AS C JOIN Products AS P
+	ON C.CategoryID=P.CategoryID JOIN Suppliers AS S
+	ON P.SupplierID=S.SupplierID
+WHERE C.Description LIKE '%drinks%' AND P.UnitsInStock > 30
+ORDER BY S.Country
+
+--5
+
+--A
+SELECT CustomerID
+FROM Customers
+UNION
+SELECT CustomerID
+FROM Orders
+
+--B
+SELECT CustomerID
+FROM Customers
+INTERSECT
+SELECT CustomerID
+FROM Orders
+
+--C
+SELECT CustomerID
+FROM Customers
+EXCEPT
+SELECT CustomerID
+FROM Orders
+
+--6
+
+--A
+SELECT ShipRegion
+FROM Orders
+WHERE ShipRegion IS NULL
+
+--B
+SELECT CustomerID
+FROM Customers
+INTERSECT
+SELECT CustomerID
+FROM Orders
+WHERE ShipRegion IS NULL
+ORDER BY 1
+
+--C
+SELECT CustomerID
+FROM Customers
+EXCEPT
+SELECT CustomerID
+FROM Orders
+WHERE ShipRegion IS NULL
+ORDER BY 1 
+
+--7
+SELECT TOP 5 JobTitle, BirthDate, SUBSTRING(LoginID,CHARINDEX('\',LoginID)+1,LEN(LoginID)) AS KorisnickoIme,
+		 DATEDIFF(YY, BirthDate, GETDATE()) AS GodineStarosti, Gender
+FROM AdventureWorks2014.HumanResources.Employee
+WHERE Gender='M'
+UNION
+SELECT TOP 5 JobTitle, BirthDate, SUBSTRING(LoginID,CHARINDEX('\',LoginID)+1,LEN(LoginID)) AS KorisnickoIme,
+		 DATEDIFF(YY, BirthDate, GETDATE()) AS GodineStarosti,Gender
+FROM AdventureWorks2014.HumanResources.Employee
+WHERE Gender='F'
+ORDER BY 5, 4 DESC
+
+--8
+SELECT TOP 3 JobTitle, HireDate, MaritalStatus, DATEDIFF(YY, HireDate, GETDATE()) AS Staz, 'Ne placa porez' AS Poruka
+FROM AdventureWorks2014.HumanResources.Employee
+WHERE MaritalStatus='M' AND JobTitle LIKE '%engineer%'
+UNION
+SELECT TOP 3 JobTitle, HireDate, MaritalStatus, DATEDIFF(YY, HireDate, GETDATE()) AS Staz, 'Placa porez' AS Poruka
+FROM AdventureWorks2014.HumanResources.Employee
+WHERE MaritalStatus='S' AND JobTitle LIKE '%engineer%'
+ORDER BY 3,4 DESC
+
+--9
+SELECT TOP 5 P.FirstName+P.LastName AS ImePrezime, E.OrganizationLevel, P.EmailPromotion, 'Ne prima' AS Poruka
+FROM AdventureWorks2014.HumanResources.Employee E JOIN AdventureWorks2014.Person.Person P
+	ON E.BusinessEntityID=P.BusinessEntityID
+WHERE E.OrganizationLevel=1 AND P.EmailPromotion=0 AND P.PersonType='EM'
+UNION
+SELECT TOP 5 P.FirstName+P.LastName AS ImePrezime, E.OrganizationLevel, P.EmailPromotion, 'Prima selektirana' AS Poruka
+FROM AdventureWorks2014.HumanResources.Employee E JOIN AdventureWorks2014.Person.Person P
+	ON E.BusinessEntityID=P.BusinessEntityID
+WHERE E.OrganizationLevel=4 AND P.EmailPromotion=1 AND P.PersonType='EM'
+UNION
+SELECT TOP 5 P.FirstName+P.LastName AS ImePrezime, E.OrganizationLevel, P.EmailPromotion, 'Prima' AS Poruka
+FROM AdventureWorks2014.HumanResources.Employee E JOIN AdventureWorks2014.Person.Person P
+	ON E.BusinessEntityID=P.BusinessEntityID
+WHERE E.OrganizationLevel=4 AND P.EmailPromotion=2 AND P.PersonType='EM'
+ORDER BY 2, 4
+
+--10
+SELECT TOP 10 RIGHT(P.Name,CHARINDEX(' ',P.Name)+1), 
+		CONVERT(varchar,SOD.OrderQty) +' kom.', 
+		CONVERT(varchar,ROUND(SOD.UnitPrice,2))+ ' KM', 
+		CONVERT(varchar,ROUND((SOD.UnitPrice-SOD.UnitPrice*SOD.UnitPriceDiscount)*SOD.OrderQty,2))+' KM' AS Iznos
+FROM AdventureWorks2014.Sales.SalesOrderDetail SOD JOIN AdventureWorks2014.Production.Product P
+	ON SOD.ProductID=P.ProductID
+
+--11
+
+--A
+SELECT *
+FROM NORTHWND.dbo.Customers 
+WHERE CustomerID IN (SELECT CustomerID
+					 FROM NORTHWND.dbo.Customers 
+					 WHERE City='Berlin')
+
+--B
+SELECT *
+FROM NORTHWND.dbo.Customers 
+WHERE CustomerID IN (SELECT CustomerID
+					 FROM NORTHWND.dbo.Customers 
+					 WHERE City='London')
+
+--12
+
+--A
+SELECT *
+FROM NORTHWND.dbo.[Order Details]
+WHERE Discount IN (SELECT Discount
+				  FROM NORTHWND.dbo.[Order Details]
+				  WHERE Discount=0)
+
+--B
+SELECT *
+FROM NORTHWND.dbo.[Order Details]
+WHERE Discount IN (SELECT Discount
+				  FROM NORTHWND.dbo.[Order Details]
+				  WHERE Discount=0.25)
+
+--13
+SELECT Discount, Quantity
+FROM NORTHWND.dbo.[Order Details]
+WHERE Discount > ANY(SELECT Discount
+				  FROM NORTHWND.dbo.[Order Details]
+				  WHERE Quantity>2)
+ORDER BY 1 DESC
+
+--14
+SELECT Discount, Quantity
+FROM NORTHWND.dbo.[Order Details]
+WHERE Discount > ALL(SELECT DISTINCT Discount
+				  FROM NORTHWND.dbo.[Order Details]
+				  WHERE Quantity<2)
+ORDER BY 1 DESC
+
+--14A
+SELECT Discount, Quantity
+FROM NORTHWND.dbo.[Order Details]
+WHERE Discount < ALL(SELECT DISTINCT Discount
+				  FROM NORTHWND.dbo.[Order Details]
+				  WHERE Quantity>2)
+ORDER BY 1 DESC
+
+--15
+SELECT ProductID, ProductName, UnitsOnOrder - (SELECT AVG(UnitsOnOrder) FROM NORTHWND.dbo.Products)
+FROM NORTHWND.dbo.Products 
+ORDER BY 3
+
+--16
+USE NORTHWND
+
+SELECT OrderDate, Freight, 
+		(SELECT MIN(Freight) FROM Orders) AS Min,
+		Freight-(SELECT MIN(Freight) FROM Orders) AS MinimalnoOdstupanje,
+		(SELECT MAX(Freight) FROM Orders) AS Max,
+		Freight-(SELECT MAX(Freight) FROM Orders) AS MaximalnoOdstupanje
+FROM Orders
+WHERE Freight BETWEEN 250 AND 750
+ORDER BY 2
+
+--17
+SELECT OrderID, ProductID, UnitPrice, UnitPrice - (SELECT AVG(UnitPrice) FROM [Order Details]) AS Razlika
+FROM [Order Details]
+ORDER BY 4
+
+--18
+SELECT ProductID, ProductName, UnitsInStock, UnitsInStock - (SELECT AVG(UnitsInStock) FROM Products) AS Razlika
+FROM Products
+WHERE UnitsInStock > 0
+ORDER BY 4 DESC
+
+--19
+SELECT O.OrderID, O.CustomerID
+FROM Orders O
+WHERE 10 < (SELECT Quantity 
+			FROM [Order Details] OD
+			WHERE O.OrderID=OD.OrderID AND OD.ProductID=15)
+
+--20
+USE pubs
+
+SELECT S.stor_id, S.stor_name
+FROM stores S
+WHERE 1 < (SELECT SA.qty
+		   FROM sales SA
+		   WHERE S.stor_id=SA.stor_id AND SA.ord_num='6871')
