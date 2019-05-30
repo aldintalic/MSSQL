@@ -1,0 +1,66 @@
+--1
+USE NORTHWND
+
+SELECT MIN(Quantity),MAX(Quantity),COUNT(OrderID), SUM(Quantity),AVG(Quantity)
+FROM [Order Details]
+
+--2
+SELECT MIN((UnitPrice-UnitPrice*Discount)*Quantity),
+		MAX((UnitPrice-UnitPrice*Discount)*Quantity)
+FROM [Order Details]
+
+--3
+SELECT COUNT(OrderID)
+FROM [Order Details]
+WHERE Discount>0
+
+--4
+
+--a
+SELECT COUNT(OrderID)
+FROM Orders
+WHERE ShipRegion IS NOT NULL
+
+--b
+SELECT COUNT(OrderID)
+FROM Orders
+WHERE ShipRegion IS NULL
+
+--5
+SELECT COUNT(OrderID)  
+FROM Orders
+WHERE YEAR(OrderDate)=1996
+
+--6
+SELECT MIN(Freight) AS Najniza,
+		MAX(Freight) AS Najvisa,
+		AVG(Freight) AS Prosjecna,
+		SUM(Freight) AS Ukupno,
+		COUNT(Freight) AS Broj_prevoza
+FROM Orders
+WHERE YEAR(OrderDate)=1997 AND ShipCountry='Germany'
+
+--7
+SELECT ShipCountry, SUM(Freight) AS Ukupno
+FROM Orders
+GROUP BY ShipCountry
+HAVING ShipCountry IN ('France', 'Germany', 'Switzerland') AND SUM(Freight)>1000
+
+--8
+SELECT ShipCountry, SUM(Freight) AS Trosak_prevoza
+FROM Orders
+GROUP BY ShipCountry
+ORDER BY 2 DESC
+
+--9
+SELECT CustomerID, SUM(Freight) AS Ukupno
+FROM Orders
+GROUP BY CustomerID
+HAVING SUM(Freight)<=7500
+ORDER BY 2 DESC
+ 
+--10
+SELECT ShipCountry, SUM(Freight) AS Ukupno
+FROM Orders
+GROUP BY ShipCountry
+HAVING ShipCountry IN ('Belgium', 'Brazil', 'USA') AND SUM(Freight)>5000
