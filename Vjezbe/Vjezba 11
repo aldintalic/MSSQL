@@ -1,0 +1,128 @@
+USE TESTIRANJE
+
+--1
+CREATE PROC usp_Studenti_Insert
+@Ime nvarchar(50) = NULL,
+@Prezime nvarchar(50) = NULL,
+@JMBG varchar(13),
+@DatumRod date = NULL,
+@Email nvarchar(50) = NULL
+AS
+BEGIN
+	INSERT INTO Studenti
+	VALUES(@Ime, @Prezime, @JMBG, @DatumRod, @Email)
+END
+
+EXEC usp_Studenti_Insert 'Aldin', 'Talic', '1234567890123', '19980730', 'test@hotmail.com'
+ 
+--2
+
+CREATE PROC usp_Studenti_Update
+@StudentID int,
+@Ime nvarchar(50) = NULL,
+@Prezime nvarchar(50) = NULL,
+@JMBG varchar(13),
+@DatumRod date = NULL,
+@Email nvarchar(50) = NULL
+AS
+BEGIN
+	UPDATE Studenti
+	SET Ime = @Ime,
+		Prezime = @Prezime,
+		JMBG = @JMBG,
+		DatumRod = @DatumRod,
+		Email = @Email
+	WHERE StudentID = @StudentID
+END
+
+EXEC usp_Studenti_Update 170014, 'Test', 'Testt', '0001112223334', '19750506', 'test.test@outlook.com'
+
+--3
+CREATE PROC usp_Studenti_Delete
+@StudentID int
+AS
+BEGIN
+	DELETE FROM Studenti
+	WHERE StudentID = @StudentID	
+END
+ 
+EXEC usp_Studenti_Delete 170017
+
+
+--4
+ALTER PROC usp_Studenti_Insert
+@Ime nvarchar(50) = NULL,
+@Prezime nvarchar(50) = NULL,
+@JMBG varchar(13),
+@DatumRod date = NULL,
+@Email nvarchar(50) = NULL,
+@Polozio bit,
+@OsvBodovi decimal(18,2),
+@Napomena varchar(100) = NULL,
+@StudentID int,
+@Oznaka varchar(10)
+AS
+BEGIN
+	INSERT INTO Studenti
+	VALUES(@Ime, @Prezime, @JMBG, @DatumRod, @Email)
+	
+	INSERT INTO RezultatiTesta
+	VALUES(@Polozio, @OsvBodovi, @Napomena, @StudentID, (SELECT TestID
+														 FROM Testovi
+														 WHERE Oznaka=@Oznaka))
+END
+
+EXEC usp_Studenti_Insert 'Novi', 'Student', '0011223344556', '1996-03-20', 'novi_student@hotmail.com', 1, 60, NULL, @@IDENTITY, 'ASPNET1'
+ 
+--5
+ALTER VIEW view_Studenti_Testovi AS
+SELECT S.Ime, S.Prezime, S.JMBG, S.Email, 
+	   T.Datum, T.Naziv, T.Oznaka, T.Oblast, T.MaksBrojBod,
+	   RT.Polozio, RT.OsvBodovi, CONCAT(CONVERT(decimal(8,2),(RT.OsvBodovi/T.MaksBrojBod)*100),'%') AS 'Osvojeni procenat'
+FROM Studenti S JOIN RezultatiTesta RT
+	ON S.StudentID = RT.StudentID JOIN Testovi T
+	ON RT.TestID = T.TestID
+
+SELECT *
+FROM view_Studenti_Testovi
+
+--6
+CREATE PROC usp_view_Studenti_Testovi_SelectByJmbgAndOznaka
+@Oznaka varchar(10),
+@JMBG varchar(13)
+AS
+BEGIN
+SELECT *
+FROM view_Studenti_Testovi
+WHERE JMBG=@JMBG AND Oznaka=@Oznaka
+END
+
+EXEC usp_view_Studenti_Testovi_SelectByJmbgAndOznaka 'ASPNET1', '0011223344556'
+
+--7
+ALTER TRIGGER tr_Testovi_delete
+ON Testovi INSTEAD OF DELETE AS
+BEGIN
+SELECT d.TestID AS TestID,
+	   d.Naziv AS Naziv,
+	   d.Oblast AS Oblast,
+	   d.Oznaka AS Oznaka,
+	   GETDATE() AS Datum,
+	   SYSTEM_USER AS Korisnik,
+	   'DELETE !!!' AS Komanda 
+INTO ##temp
+FROM deleted d
+PRINT 'Brisanje nije dozvoljeno u ovoj tabeli!'
+END
+
+--8
+ALTER PROC usp_Testovi_delete 
+AS
+BEGIN
+DELETE FROM Testovi
+END
+
+EXEC usp_Testovi_delete
+
+SELECT *
+FROM ##temp
