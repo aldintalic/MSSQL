@@ -1,0 +1,127 @@
+--1
+CREATE DATABASE Joini
+
+USE Joini
+
+CREATE TABLE JoinTabela1(
+OsobaID int IDENTITY(1,1) CONSTRAINT PK_OsobaID PRIMARY KEY(OsobaID),
+TipOsobe char(2) NOT NULL,
+Prezime varchar(50) NULL,
+Ime varchar(50) NOT NULL,
+BrTel varchar(25) NOT NULL,
+Lozinka varchar(128) NOT NULL
+)
+
+--2
+INSERT INTO JoinTabela1
+SELECT P.PersonType, P.FirstName, P.LastName, PP.PhoneNumber, PAS.PasswordHash
+FROM AdventureWorks2014.Person.Person AS P JOIN AdventureWorks2014.Person.Password AS PAS
+	ON P.BusinessEntityID=PAS.BusinessEntityID JOIN AdventureWorks2014.Person.PersonPhone AS PP
+	ON PAS.BusinessEntityID=PP.BusinessEntityID
+
+--3
+CREATE TABLE JoinTabela2(
+ProizvodID int IDENTITY(1,1) CONSTRAINT PK_ProizvodID PRIMARY KEY (ProizvodID),
+BrProizvoda varchar(20) NOT NULL,
+Velicina char(5) NULL,
+Tezina decimal(8,2) NULL,
+BrDanaZaProizv int NOT NULL,
+Kolicina int NOT NULL,
+Naziv varchar(50) NULL
+)
+
+--4
+INSERT INTO JoinTabela2
+SELECT P.ProductNumber, P.Size, P.Weight, P.DaysToManufacture, PI.Quantity, L.Name
+FROM AdventureWorks2014.Production.Location AS L JOIN AdventureWorks2014.Production.ProductInventory AS PI
+	ON L.LocationID=PI.LocationID JOIN AdventureWorks2014.Production.Product AS P
+	ON PI.ProductID=P.ProductID
+
+--5
+CREATE TABLE JoinTabela3(
+KljucID int IDENTITY(1,1) CONSTRAINT PK_KljucID PRIMARY KEY (KljucID),
+DatumRodjenja date NOT NULL,
+DatumZaposlenja date NULL,
+Resume xml NOT NULL,
+OdjelID char(3) NULL
+)
+
+--6
+INSERT INTO JoinTabela3
+SELECT E.BirthDate, E.HireDate, JC.Resume, EDH.DepartmentID
+FROM AdventureWorks2014.HumanResources.EmployeeDepartmentHistory AS EDH JOIN AdventureWorks2014.HumanResources.Employee AS E
+	ON EDH.BusinessEntityID=E.BusinessEntityID JOIN AdventureWorks2014.HumanResources.JobCandidate AS JC
+	ON E.BusinessEntityID=JC.BusinessEntityID
+
+--7
+INSERT INTO JoinTabela2 
+SELECT P.ProductNumber, P.Size, P.Weight, P.DaysToManufacture, PI.Quantity, L.Name
+FROM AdventureWorks2014.Production.Product AS P JOIN AdventureWorks2014.Production.ProductInventory AS PI
+	ON P.ProductID=PI.ProductID JOIN AdventureWorks2014.Production.Location AS L
+	ON PI.LocationID=L.LocationID
+WHERE P.ProductNumber LIKE '%[A-Z][0-9][0-9]%' OR P.ProductNumber LIKE '%[0-9][0-9][A-Z]%' OR P.ProductNumber LIKE '%[A-Z][0-9][0-9][A-Z]%'
+
+--8
+CREATE TABLE JoinTabela4(
+NarudzbaID int CONSTRAINT PK_NarudzbaID PRIMARY KEY (NarudzbaID),
+NazivKompanije nvarchar(50) NULL,
+KupacID char(5) NULL,
+UposlenikID int NOT NULL,
+Grad varchar(20) NULL,
+Drzava char(4) NULL
+)
+
+--9
+INSERT INTO JoinTabela4
+SELECT O.OrderID, C.CompanyName, C.CustomerID, E.EmployeeID, E.City, E.Country
+FROM NORTHWND.dbo.Orders AS O JOIN NORTHWND.dbo.Customers AS C
+	ON O.CustomerID=C.CustomerID JOIN NORTHWND.dbo.Employees AS E
+	ON O.EmployeeID=E.EmployeeID 
+
+--10
+CREATE TABLE JoinTabela5(
+PrimarniKljuc int IDENTITY(1,1) CONSTRAINT PK_PrimarniKljuc PRIMARY KEY (PrimarniKljuc),
+NarudzbaID int NOT NULL,
+JedCijena decimal(8,2) NOT NULL,
+Kolicina int NOT NULL,
+NazivProizvoda nvarchar(50) NULL,
+DobavljacID int NOT NULL,
+Ukupno decimal(8,2) NOT NULL,
+CONSTRAINT FK_NarudzbaID FOREIGN KEY (NarudzbaID) REFERENCES JoinTabela4 (NarudzbaID)
+)
+
+--11
+INSERT INTO JoinTabela5
+SELECT OD.OrderID, OD.UnitPrice, OD.Quantity, P.ProductName, P.SupplierID, (OD.UnitPrice*OD.Quantity)
+FROM NORTHWND.dbo.[Order Details] AS OD JOIN NORTHWND.dbo.Products AS P
+	ON OD.ProductID=P.ProductID
+
+--12
+SELECT JT4.NazivKompanije, JT4.NarudzbaID, SUM(JT5.Ukupno) AS Sumirano
+FROM JoinTabela4 AS JT4 JOIN JoinTabela5 JT5
+	ON JT4.NarudzbaID=JT5.NarudzbaID
+GROUP BY JT4.NazivKompanije, JT4.NarudzbaID
+ORDER BY 3 DESC
+
+--13
+SELECT JT4.NazivKompanije, JT4.NarudzbaID, COUNT(JT5.NarudzbaID) AS BrojNarudzbi
+FROM JoinTabela4 AS JT4 JOIN JoinTabela5 AS JT5
+	ON JT4.NarudzbaID=JT5.NarudzbaID
+GROUP BY JT4.NazivKompanije, JT4.NarudzbaID
+HAVING COUNT(JT5.NarudzbaID) > 3
+
+--14
+SELECT V.Name, POH.OrderDate, POD.OrderQty, POD.UnitPrice, (POD.OrderQty*POD.UnitPrice) AS VrijednostNarudzbe
+FROM AdventureWorks2014.Purchasing.PurchaseOrderDetail AS POD JOIN AdventureWorks2014.Purchasing.PurchaseOrderHeader AS POH
+	ON POD.PurchaseOrderID=POH.PurchaseOrderID JOIN AdventureWorks2014.Purchasing.Vendor AS V
+	ON POH.VendorID=V.BusinessEntityID
+ORDER BY 4
+
+--15
+SELECT V.Name, POD.OrderQty, POD.UnitPrice, (POD.OrderQty*POD.UnitPrice) AS VrijednostNarudzbe,
+		COUNT(POD.OrderQty*POD.UnitPrice) AS UkupanBrojNarudzbi
+FROM AdventureWorks2014.Purchasing.PurchaseOrderDetail AS POD JOIN AdventureWorks2014.Purchasing.PurchaseOrderHeader AS POH
+	ON POD.PurchaseOrderID=POH.PurchaseOrderID JOIN AdventureWorks2014.Purchasing.Vendor AS V
+	ON POH.VendorID=V.BusinessEntityID
+GROUP BY V.Name, POD.OrderQty, POD.UnitPrice, (POD.OrderQty*POD.UnitPrice)
+ORDER BY 5
