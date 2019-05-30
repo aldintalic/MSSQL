@@ -1,0 +1,101 @@
+--1
+CREATE DATABASE Agregatne
+
+USE Agregatne
+
+--2
+CREATE SCHEMA Funkcije
+
+--3
+CREATE TABLE Funkcije.Odjel(
+OdjelID smallint IDENTITY(1,1) CONSTRAINT PK_OdjelID PRIMARY KEY(OdjelID),
+Naziv nvarchar(50) NOT NULL,
+NazivSektora nvarchar(50) NOT NULL,
+DatumKreiranja date NOT NULL
+)
+
+--4
+INSERT INTO Funkcije.Odjel
+SELECT Name, GroupName,ModifiedDate
+FROM AdventureWorks2014.HumanResources.Department
+WHERE GroupName IN ('Research and Development', 'Sales and Marketing')
+
+--5
+CREATE TABLE Funkcije.AgdOdjel(
+NazivSektora nvarchar(50) NOT NULL,
+UkupnoSektor int NULL
+)
+
+--6
+INSERT INTO Funkcije.AgdOdjel
+SELECT GroupName, COUNT(Name)
+FROM AdventureWorks2014.HumanResources.Department
+GROUP BY GroupName
+
+--7
+SELECT YEAR(BirthDate) AS GodinaRodjenja, YEAR(HireDate) as GodinaZaposlenja, COUNT(BusiNessEntityID) AS Ukupno
+FROM AdventureWorks2014.HumanResources.Employee
+GROUP BY YEAR(BirthDate), YEAR(HireDate)
+ORDER BY 3 DESC
+
+--8
+SELECT JobTitle, COUNT(JobTitle) 
+FROM AdventureWorks2014.HumanResources.Employee
+WHERE JobTitle LIKE '%manager%'
+GROUP BY JobTitle
+
+--10
+SELECT Rate,COUNT(Rate)
+FROM AdventureWorks2014.HumanResources.EmployeePayHistory
+WHERE Rate>10
+GROUP BY Rate
+
+--11
+SELECT Rate,COUNT(Rate)
+FROM AdventureWorks2014.HumanResources.EmployeePayHistory
+GROUP BY Rate
+HAVING COUNT(Rate)>10
+ORDER BY 2 DESC
+
+--12
+SELECT DATEDIFF(DD,StartDate,EndDate) AS BrojDanaRazlike, COUNT(DATEDIFF(DD,StartDate,EndDate))
+FROM AdventureWorks2014.Production.ProductCostHistory
+GROUP BY DATEDIFF(DD,StartDate,EndDate)
+
+--13
+SELECT LEFT(ProductNumber,2), COUNT(LEFT(ProductNumber,2))
+FROM AdventureWorks2014.Production.Product
+GROUP BY LEFT(ProductNumber,2)
+ORDER BY 2 DESC, 1 DESC
+
+--14
+SELECT YEAR(SellStartDate),COUNT(YEAR(SellStartDate)) 
+FROM AdventureWorks2014.Production.Product
+GROUP BY YEAR(SellStartDate)
+ORDER BY 1 DESC, 2 DESC
+
+--15
+CREATE TABLE CijenaGodine(
+Godina int,
+Cijena decimal(8,2),
+BrojacCijena int
+)
+
+--16
+INSERT INTO CijenaGodine
+SELECT YEAR(SellStartDate), StandardCost, COUNT(StandardCost)
+FROM AdventureWorks2014.Production.Product
+GROUP BY YEAR(SellStartDate), StandardCost
+
+--17
+SELECT Godina, MIN(Cijena), MAX(Cijena), AVG(Cijena), SUM(Cijena)
+FROM CijenaGodine
+GROUP BY Godina
+
+--18
+SELECT Godina, BrojacCijena, COUNT(BrojacCijena)
+FROM CijenaGodine
+GROUP BY Godina, BrojacCijena
+ORDER BY 1
+
+
