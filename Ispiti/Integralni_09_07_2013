@@ -1,0 +1,169 @@
+/*INTEGRALNI ISPIT - 09.07.2013*/
+
+--1
+USE NORTHWND
+
+SELECT P.ProductName, CONCAT(S.CompanyName, '(', S.City, ', ', S.Address, ')') AS 'Kompanija',
+	   S.Phone AS 'Telefon', 
+	   OD.UnitPrice AS 'Cijena po komadu',
+	   P.UnitsInStock AS 'Stanje zaliha',
+	   (P.UnitsInStock-P.UnitsOnOrder) AS 'Razlika'
+FROM Suppliers S JOIN Products P
+	ON S.SupplierID = P.SupplierID JOIN [Order Details] OD
+	ON P.ProductID = OD.ProductID
+WHERE P.UnitsOnOrder > P.UnitsInStock AND OD.UnitPrice > 20
+
+--2
+USE NORTHWND
+
+SELECT C.CompanyName, C.ContactName, C.Phone,
+	   DATEDIFF(DD,O.OrderDate, O.RequiredDate) AS 'Broj potrebnih dana',
+	   DATEDIFF(DD,O.OrderDate, O.ShippedDate) AS 'Broj utrosenih dana',
+	   DATEDIFF(DD,O.OrderDate, O.RequiredDate) - DATEDIFF(DD,O.OrderDate, O.ShippedDate) AS 'Broj dana kasnjenja'
+FROM Customers C JOIN Orders O
+	ON C.CustomerID = O.CustomerID
+WHERE DATEDIFF(DD,O.OrderDate, O.ShippedDate) > DATEDIFF(DD,O.OrderDate, O.RequiredDate)
+
+--3
+USE AdventureWorksLT2012
+
+SELECT ISNULL(PC.Name,0) 'Kategorija', 
+	   ISNULL(PM.Name,0) 'Model',
+	   ISNULL(P.ProductNumber,0) 'Broj proizvoda', 
+	   ISNULL(P.ListPrice,0) 'Cijena', 
+	   ISNULL(P.Color,0) 'Boja', 
+	   COUNT(SOD.ProductID) 'Broj prodatih proizvoda'
+FROM SalesLT.Product P JOIN SalesLT.ProductCategory PC
+	ON P.ProductCategoryID = PC.ProductCategoryID JOIN SalesLT.ProductModel PM
+	ON P.ProductModelID = PM.ProductModelID LEFT JOIN SalesLT.SalesOrderDetail SOD
+	ON P.ProductID = SOD.ProductID
+WHERE (PC.Name = 'Mountain Bikes' AND P.Color='Black' AND P.ListPrice > 2000) OR 
+		(P.ProductNumber LIKE '%L' AND P.Color='White')
+GROUP BY PC.Name, PM.Name, P.ProductNumber, P.ListPrice, P.Color
+ORDER BY 6 DESC
+
+--4
+CREATE DATABASE IB170067
+
+--5
+USE IB170067
+
+CREATE TABLE Kupci(
+KupacID int IDENTITY(1,1) CONSTRAINT PK_Kupci PRIMARY KEY,
+Ime nvarchar(35) NOT NULL,
+Prezime nvarchar(35) NOT NULL,
+Telefon varchar(15) NULL,
+Email varchar(50) NULL,
+KorisnickoIme varchar(15) NOT NULL CONSTRAINT UC_Kupci UNIQUE,
+Lozinka varchar(15) NOT NULL
+)
+
+CREATE TABLE Proizvodi(
+ProizvodID int IDENTITY(1,1) CONSTRAINT PK_Proizvodi PRIMARY KEY,
+Sifra varchar(25) NOT NULL,
+Naziv nvarchar(50) NOT NULL,
+Cijena decimal(8,2) NOT NULL,
+Zaliha int NOT NULL
+)
+
+CREATE TABLE Narudzbe(
+NarudzbaID int IDENTITY(1,1) CONSTRAINT PK_Narudzbe PRIMARY KEY,
+KupacID int CONSTRAINT FK_NarudzbeKupci FOREIGN KEY REFERENCES Kupci (KupacID),
+ProizvodID int CONSTRAINT FK_NarudzbeProizvodi FOREIGN KEY REFERENCES Proizvodi (ProizvodID),
+Kolicina int NOT NULL,
+Popust decimal(8,2) DEFAULT 0
+)
+
+
+--6
+ALTER TABLE Proizvodi
+ALTER COLUMN Zaliha decimal(8,2) NOT NULL
+
+ALTER TABLE Narudzbe
+ALTER COLUMN Kolicina decimal(8,2) NOT NULL
+
+--7
+INSERT INTO Kupci
+SELECT TOP 10 C.FirstName, C.LastName, C.Phone, C.EmailAddress, 
+	   LEFT(C.EmailAddress,CHARINDEX('@',C.EmailAddress)-1),
+	   LEFT(C.PasswordHash,8)
+FROM AdventureWorksLT2012.SalesLT.Customer C
+
+SELECT *
+FROM Kupci
+
+--8
+SELECT TOP 5 P.ProductNumber 'Sifra', P.Name 'Naziv', P.StandardCost 'Cijena' INTO #tempIB170067 
+FROM AdventureWorksLT2012.SalesLT.Product P
+
+SELECT *
+FROM #tempIB170067
+
+SELECT * FROM tempdb.sys.objects
+
+--9
+ALTER PROC usp_Narudzbe_Insert 
+@KupacID int = NULL,
+@ProizvodID int = NULL,
+@Kolicina decimal(8,2),
+@Popust decimal(8,2) = NULL
+AS
+BEGIN
+INSERT INTO Narudzbe
+VALUES(@KupacID, @ProizvodID, @Kolicina, @Popust)
+
+UPDATE Proizvodi
+SET Zaliha=Zaliha-@Kolicina
+WHERE ProizvodID=@ProizvodID
+END
+
+--10
+EXEC usp_Narudzbe_Insert 1, 1, 2, 0
+EXEC usp_Narudzbe_Insert 1, 2, 5, 0.1
+EXEC usp_Narudzbe_Insert 3, 4, 10, 0.05
+EXEC usp_Narudzbe_Insert 5, 1, 3, 0
+EXEC usp_Narudzbe_Insert 2, 2, 8, 0.2
+
+--11
+CREATE VIEW	view_Kupci_Narudzbe AS
+SELECT K.Ime, K.Prezime, K.Telefon,
+	   P.Sifra, P.Naziv, P.Cijena, P.Zaliha
+FROM Kupci K JOIN Narudzbe N
+	ON K.KupacID = N.KupacID JOIN Proizvodi P
+	ON N.ProizvodID = P.ProizvodID
+
+--12
+CREATE PROC usp_Kupci_Narudzbe 
+@ImePrezime nvarchar(35)
+AS
+BEGIN
+SELECT *
+FROM view_Kupci_Narudzbe
+WHERE Ime=@ImePrezime OR Prezime=@ImePrezime
+END
+
+EXEC usp_Kupci_Narudzbe 'Orlando'
+
+--13
+CREATE PROC usp_Proizvodi_Delete
+@ProizvodID int
+AS
+BEGIN
+DELETE FROM Proizvodi
+WHERE ProizvodID=@ProizvodID
+END
+
+EXEC usp_Proizvodi_Delete 4
+
+ALTER PROC usp_Proizvodi_Delete
+@ProizvodID int
+AS
+BEGIN
+DELETE FROM Narudzbe
+WHERE ProizvodID=@ProizvodID
+
+DELETE FROM Proizvodi
+WHERE ProizvodID=@ProizvodID
+END
+
+EXEC usp_Proizvodi_Delete 4
