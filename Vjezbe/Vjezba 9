@@ -1,0 +1,148 @@
+USE TESTIRANJE
+
+--1
+CREATE TABLE Komisija(
+Ime varchar(30) NOT NULL,
+Prezime varchar(30) NOT NULL,
+Titula varchar(15) NULL,
+Telefon varchar(20) NULL,
+Email varchar(50) NULL
+)
+
+--2
+INSERT INTO Komisija
+SELECT TOP 10000 P.FirstName, P.LastName, ISNULL(P.Title,'NEPOZNAT'), LEFT(PP.PhoneNumber,7), EA.EmailAddress
+FROM AdventureWorks2014.Person.Person P JOIN AdventureWorks2014.Person.PersonPhone PP
+	ON P.BusinessEntityID=PP.BusinessEntityID JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON PP.BusinessEntityID=EA.BusinessEntityID
+
+--3
+ALTER TABLE Komisija
+ADD ClanKomisijeID int IDENTITY(1,1) CONSTRAINT PK_Komisija PRIMARY KEY
+
+--4
+CREATE TABLE PredmetneKomisije(
+ClanKomisijeID int NOT NULL,
+TestID int NOT NULL,
+ImeClana varchar(30) NULL,
+PrezimeClana varchar(30) NULL,
+NazivTesta varchar(50) NULL,
+OznakaTesta varchar(10) NULL
+CONSTRAINT PK_PredmetneKomisije PRIMARY KEY (ClanKomisijeID, TestID),
+CONSTRAINT FK_PredmetneKomisije_Testovi FOREIGN KEY (TestID) REFERENCES Testovi(TestID),
+CONSTRAINT FK_PredmetneKomisije_Komisija FOREIGN KEY (ClanKomisijeID) REFERENCES Komisija(ClanKomisijeID)
+)
+
+INSERT INTO PredmetneKomisije
+SELECT K.ClanKomisijeID, T.TestID, K.Ime, K.Prezime, T.Naziv, T.Oznaka
+FROM Komisija K JOIN Testovi T
+	ON K.ClanKomisijeID=T.TestID
+WHERE K.ClanKomisijeID=T.TestID
+
+--5
+CREATE NONCLUSTERED INDEX IX_Telefon ON Komisija
+(
+Telefon ASC
+)
+
+INSERT INTO Komisija
+SELECT TOP 10 P.FirstName, P.LastName, ISNULL(P.Title,'NEPOZNAT'), LEFT(PP.PhoneNumber,7), EA.EmailAddress
+FROM AdventureWorks2014.Person.Person P JOIN AdventureWorks2014.Person.PersonPhone PP
+	ON P.BusinessEntityID=PP.BusinessEntityID JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON PP.BusinessEntityID=EA.BusinessEntityID
+ORDER BY 3 DESC
+
+--6
+CREATE NONCLUSTERED INDEX IX_Ime_Prezime ON Komisija
+(
+Ime ASC, 
+Prezime ASC
+)
+
+INSERT INTO Komisija
+SELECT TOP 10 P.FirstName, P.LastName, ISNULL(P.Title,'NEPOZNAT'), LEFT(PP.PhoneNumber,7), EA.EmailAddress
+FROM AdventureWorks2014.Person.Person P JOIN AdventureWorks2014.Person.PersonPhone PP
+	ON P.BusinessEntityID=PP.BusinessEntityID JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON PP.BusinessEntityID=EA.BusinessEntityID
+ORDER BY 1, 2
+
+--7
+CREATE UNIQUE INDEX UQ_Email ON Komisija
+(
+Email DESC
+)
+
+--8
+USE pubs
+
+UPDATE discounts
+SET stor_id=7067
+WHERE discount=10.50
+
+UPDATE discounts
+SET stor_id=7131
+WHERE discount=6.70
+
+SELECT *
+FROM discounts
+
+--9
+SELECT D.discounttype, S.stor_name, S.city, SA.ord_date, SA.qty, T.title, T.type
+FROM discounts D JOIN STORES S
+	ON D.stor_id=S.stor_id JOIN sales SA
+	ON S.stor_id=SA.stor_id JOIN titles T
+	ON SA.title_id=T.title_id
+WHERE D.discount>5
+ORDER BY T.type
+
+--10
+SELECT D.discounttype, S.stor_name, S.city, SA.ord_date, SA.qty, T.title, T.type
+FROM discounts D JOIN STORES S
+	ON D.stor_id=S.stor_id JOIN sales SA
+	ON S.stor_id=SA.stor_id JOIN titles T
+	ON SA.title_id=T.title_id
+WHERE D.discount<=5
+ORDER BY T.type
+
+--11
+USE NORTHWND
+
+SELECT C.CompanyName, SUM(O.Freight) AS UkupniTrosak
+FROM Customers C JOIN Orders O 
+	ON C.CustomerID=O.CustomerID
+WHERE YEAR(O.OrderDate) = 1997
+GROUP BY C.CompanyName
+
+--12
+SELECT E.LastName+E.FirstName AS ImePrezime, T.TerritoryDescription, R.RegionDescription
+FROM Employees E JOIN EmployeeTerritories ET
+	ON E.EmployeeID=ET.EmployeeID JOIN Territories T
+	ON ET.TerritoryID=T.TerritoryID JOIN Region R
+	ON T.RegionID=R.RegionID
+WHERE DATEDIFF(YY, E.BirthDate, GETDATE()) > 30
+
+--13
+SELECT E.FirstName+E.LastName AS ImePrezime, OD.UnitPrice, OD.Quantity, (OD.UnitPrice-OD.UnitPrice*OD.Discount)*OD.Quantity AS Ukupno
+FROM Employees E JOIN Orders O
+	ON E.EmployeeID=O.EmployeeID JOIN [Order Details] OD
+	ON O.OrderID=OD.OrderID
+WHERE YEAR(O.OrderDate)=1997
+ORDER BY 4
+
+--14
+SELECT E.FirstName,SUM((OD.UnitPrice-OD.UnitPrice*OD.Discount)*OD.Quantity) AS Ukupno
+FROM Employees E JOIN Orders O
+	ON E.EmployeeID=O.EmployeeID JOIN [Order Details] OD
+	ON O.OrderID=OD.OrderID
+WHERE YEAR(O.OrderDate)=1997 
+GROUP BY E.FirstName
+HAVING SUM((OD.UnitPrice-OD.UnitPrice*OD.Discount)*OD.Quantity) > 50000
+ORDER BY 1 
+
+--15
+SELECT S.CompanyName, S.City, S.Country, P.ProductName
+FROM Categories C JOIN Products P
+	ON C.CategoryID=P.CategoryID JOIN Suppliers S
+	ON P.SupplierID=S.SupplierID
+WHERE C.Description LIKE '%drinkS%' AND P.UnitsInStock > 30
+ORDER BY S.Country
