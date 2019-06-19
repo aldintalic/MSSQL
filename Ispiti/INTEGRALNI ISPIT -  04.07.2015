@@ -1,0 +1,212 @@
+/*INTEGRALNI ISPIT -  04.07.2015*/
+
+--A
+USE AdventureWorks2014
+SELECT C.CustomerID, COUNT(P.ProductID) AS Ukupno
+FROM Sales.Customer C JOIN Sales.SalesOrderHeader SOH
+	ON C.CustomerID = SOH.CustomerID JOIN Sales.SalesOrderDetail SOD
+	ON SOH.SalesOrderID = SOD.SalesOrderID JOIN Sales.SpecialOfferProduct SOP
+	ON SOD.SpecialOfferID = SOP.SpecialOfferID JOIN Production.Product P
+	ON SOP.ProductID = P.ProductID
+WHERE P.Name = 'Front Brakes' AND MONTH(SOH.OrderDate)=5 AND YEAR(SOH.OrderDate)=2014
+GROUP BY C.CustomerID
+HAVING COUNT(P.ProductID)>5
+ORDER BY 2 DESC
+
+--B
+USE AdventureWorks2014
+SELECT TOP 5 P.Name,SUM(SOD.OrderQty) Ukupno
+FROM Sales.SalesOrderDetail SOD JOIN Sales.SpecialOfferProduct SOP
+	ON SOD.SpecialOfferID = SOP.SpecialOfferID JOIN Production.Product P
+	ON SOP.ProductID = P.ProductID JOIN Production.ProductSubcategory PSC
+	ON P.ProductSubcategoryID = PSC.ProductSubcategoryID
+WHERE PSC.Name='Mountain Bikes'
+GROUP BY P.Name
+ORDER BY 2 DESC
+
+
+--1
+CREATE DATABASE IB170067_B
+ON PRIMARY
+(
+	NAME = Integralni_dat,
+	FILENAME = 'C:\BP2\Data\Integralni.mdf'
+)
+LOG ON
+(
+	NAME = Integralni_log,
+	FILENAME = 'C:\BP2\Log\Integralni.ldf'
+)
+
+--2
+USE IB170067_B
+
+CREATE TABLE Klijenti(
+JMBG varchar(13) NOT NULL CONSTRAINT UQ_Jmbg UNIQUE,
+Ime varchar(30) NOT NULL,
+Prezime varchar(30) NOT NULL,
+Adresa varchar(100) NOT NULL,
+Telefon varchar(20) NOT NULL,
+Email varchar(50) CONSTRAINT UQ_Email UNIQUE,
+Kompanija varchar(50)
+)
+
+CREATE TABLE Krediti(
+Datum date NOT NULL,
+Namjena varchar(50) NOT NULL,
+Iznos decimal(8,2) NOT NULL,
+BrojRata int NOT NULL,
+Osiguran bit NOT NULL,
+Opis varchar(255) NULL
+)
+
+CREATE TABLE Otplate(
+Datum date NOT NULL,
+Iznos decimal(8,2) NOT NULL,
+Rata int NOT NULL,
+Opis varchar(255) NULL
+)
+
+
+ALTER TABLE Klijenti
+ADD KlijentID int IDENTITY(1,1) CONSTRAINT PK_Klijenti PRIMARY KEY
+
+ALTER TABLE Krediti
+ADD KreditID int IDENTITY(1,1) CONSTRAINT PK_Krediti PRIMARY KEY
+
+ALTER TABLE Krediti
+ADD KlijentID int CONSTRAINT FK_Klijenti_Krediti FOREIGN KEY REFERENCES Klijenti(KlijentID)
+
+ALTER TABLE Otplate 
+ADD OtplataID int IDENTITY(1,1) CONSTRAINT PK_Otplate PRIMARY KEY,
+	KreditID int CONSTRAINT FK_Krediti_Otplate FOREIGN KEY REFERENCES Krediti(KreditID)
+
+--3
+INSERT INTO Klijenti
+SELECT TOP 10
+	   REPLACE(RIGHT(C.rowguid,13),'-',1),
+	   P.FirstName,
+	   P.LastName,
+	   A.AddressLine1,
+	   PP.PhoneNumber,
+	   EA.EmailAddress,
+	   'FIT'
+FROM AdventureWorks2014.Sales.Customer C JOIN AdventureWorks2014.Person.Person P
+	ON C.PersonID = C.PersonID JOIN AdventureWorks2014.Person.BusinessEntity BE 
+	ON P.BusinessEntityID = BE.BusinessEntityID JOIN AdventureWorks2014.Person.BusinessEntityAddress BEA
+	ON BE.BusinessEntityID = BEA.BusinessEntityID JOIN AdventureWorks2014.Person.Address A
+	ON BEA.AddressID = A.AddressID JOIN AdventureWorks2014.Person.PersonPhone PP
+	ON P.BusinessEntityID = PP.BusinessEntityID JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON P.BusinessEntityID = EA.BusinessEntityID
+ORDER BY NEWID()
+
+INSERT INTO Krediti
+VALUES('2018-07-05','Kupovina automobila', 15000, 24, 1, NULL, 5)
+
+INSERT INTO Krediti
+VALUES('2019-02-20','Kupovina stana', 80000, 120, 1, NULL, 1)
+
+INSERT INTO Krediti
+VALUES('2017-11-01','Renoviranje kuce', 25000, 48, 0, NULL, 9)
+
+SELECT *
+FROM Krediti
+
+--4
+CREATE PROC usp_Otplate_Insert
+@Datum date,
+@Iznos decimal(8,2),
+@Rata int,
+@Opis varchar(255) = NULL,
+@KreditID int
+AS
+BEGIN
+INSERT INTO Otplate
+VALUES(@Datum, @Iznos, @Rata, @Opis, @KreditID)
+END
+
+EXEC usp_Otplate_Insert '2018-08-07', 200, 1, NULL, 1
+EXEC usp_Otplate_Insert '2018-09-07', 200, 2, NULL, 1
+EXEC usp_Otplate_Insert '2018-08-05', 150, 1, NULL, 3
+
+CREATE VIEW view_Krediti_Otplate
+AS
+SELECT K.JMBG, K.Ime, K.Prezime, K.Adresa, K.Telefon, K.Email,
+	   KR.Datum, KR.Namjena, KR.Iznos, 
+	   COUNT(O.OtplataID) AS 'Otplaceno rata', SUM(O.Iznos) AS 'Otplaceni iznos'
+FROM Klijenti K JOIN Krediti KR
+	ON K.KlijentID = KR.KlijentID JOIN Otplate O
+	ON KR.KreditID = O.KreditID
+GROUP BY  K.JMBG, K.Ime, K.Prezime, K.Adresa, K.Telefon, K.Email,
+	   KR.Datum, KR.Namjena, KR.Iznos
+
+SELECT *
+FROM view_Krediti_Otplate
+
+--6
+CREATE PROC usp_Krediti_Otplate_SelectByJMBG
+@JMBG varchar(13)
+AS
+BEGIN
+SELECT *
+FROM view_Krediti_Otplate
+WHERE JMBG = @JMBG
+END
+
+EXEC usp_Krediti_Otplate_SelectByJMBG '12431ED01BF52'
+
+--7
+CREATE PROC usp_Otplate_Update
+@Datum date,
+@Iznos decimal(8,2),
+@Rata int,
+@Opis varchar(255) = NULL,
+@OtplataID int,
+@KreditID int
+AS
+BEGIN
+UPDATE Otplate
+SET Datum=@Datum, Iznos=@Iznos, Rata=@Rata, Opis=@Opis, KreditID=@KreditID
+WHERE OtplataID=@OtplataID
+END
+
+EXEC usp_Otplate_Update '2018-08-20', 200, 1, NULL, 1, 1
+
+--8
+CREATE PROC usp_Krediti_Delete
+@KreditID int
+AS
+BEGIN
+DELETE FROM Otplate
+WHERE KreditID=@KreditID
+
+DELETE FROM Krediti
+WHERE KreditID=@KreditID
+END
+
+EXEC usp_Krediti_Delete 3
+
+--9
+CREATE TRIGGER tr_Otplate_IO_Delete
+ON Otplate INSTEAD OF DELETE
+AS
+BEGIN
+SELECT 
+FROM deleted d
+
+PRINT('Brisanje nije dozvoljeno u ovoj tabeli')
+END
+
+DELETE FROM Otplate
+
+SELECT *
+FROM Otplate
+
+--10
+BACKUP DATABASE IB170067_B
+TO DISK='C:\BP2\Backup\IB170067_B.bak'
+
+
+
+
+
