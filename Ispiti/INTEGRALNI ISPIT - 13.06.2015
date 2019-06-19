@@ -1,0 +1,192 @@
+/* INTEGRALNI ISPIT - 13.06.2015 */
+
+--b
+USE AdventureWorks2014
+
+SELECT CONCAT(P.FirstName,' ',P.LastName) AS 'Ime i prezime',
+	   CC.CardType AS 'Tip kartice',
+	   CC.CardNumber AS 'Broj kartice',
+	   SUM(SOH.SubTotal) AS 'Ukupno placeno karticom'
+FROM Person.Person P JOIN Sales.PersonCreditCard PCC
+	 ON P.BusinessEntityID = PCC.BusinessEntityID JOIN Sales.CreditCard CC
+	 ON PCC.CreditCardID = CC.CreditCardID JOIN Sales.SalesOrderHeader SOH
+	 ON CC.CreditCardID = SOH.CreditCardID
+GROUP BY CONCAT(P.FirstName,' ',P.LastName), CC.CardType, CC.CardNumber
+HAVING COUNT(SOH.CreditCardID) > 20
+
+--1
+CREATE DATABASE IB170067_A
+ON	
+	(NAME=file_dat, FILENAME='C:\BP2\Data\file.mdf')
+LOG ON
+	(NAME=file_log, FILENAME='C:\BP2\Log\file.ldf')
+
+--2
+USE IB170067_A
+
+CREATE TABLE Kandidati(
+Ime varchar(30) NOT NULL,
+Prezime varchar(30) NOT NULL,
+JMBG varchar(13) NOT NULL CONSTRAINT UQ_JMBG UNIQUE CHECK(LEN(JMBG)=13),
+DatumRodjenja date NOT NULL,
+MjestoRodjenja varchar(30) NULL,
+Telefon varchar(20) NULL,
+Email varchar(50) CONSTRAINT UQ_Email UNIQUE NULL
+)
+
+CREATE TABLE Testovi(
+Datum datetime NOT NULL,
+Naziv varchar(50) NOT NULL,
+Oznaka varchar(10) NOT NULL CONSTRAINT UQ_Oznaka UNIQUE,
+Oblast varchar(50) NOT NULL,
+MaxBrojBodova int NOT NULL,
+Opis nvarchar(250) NULL
+)
+
+CREATE TABLE RezultatiTesta(
+Polozio bit NOT NULL,
+OsvojeniBodovi decimal(8,2) NOT NULL,
+Napomena nvarchar(250) NULL
+)
+
+ALTER TABLE Kandidati
+ADD KandidatID int CONSTRAINT PK_Kandidati PRIMARY KEY IDENTITY(1,1)
+
+ALTER TABLE Testovi
+ADD TestID int CONSTRAINT PK_Testovi PRIMARY KEY IDENTITY(1,1)
+
+ALTER TABLE RezultatiTesta
+ADD KandidatID int CONSTRAINT FK_RezultatiTesta_Kandidati FOREIGN KEY REFERENCES Kandidati(KandidatID),
+    TestID int CONSTRAINT FK_RezultatiTesta_Testovi FOREIGN KEY REFERENCES Testovi(TestID),
+	CONSTRAINT PK_RezultatiTesta PRIMARY KEY (KandidatID, TestID)
+
+--3
+INSERT INTO Kandidati
+SELECT TOP 10 P.FirstName, 
+			  P.LastName, 
+		      REPLACE(RIGHT(C.rowguid, 13), '-',0), 
+			  C.ModifiedDate,
+			  A.City,
+			  PP.PhoneNumber,
+			  EA.EmailAddress
+FROM AdventureWorks2014.Sales.Customer C JOIN AdventureWorks2014.Person.Person P
+	ON C.PersonID = P.BusinessEntityID JOIN AdventureWorks2014.Person.BusinessEntity BE
+	ON P.BusinessEntityID = BE.BusinessEntityID JOIN AdventureWorks2014.Person.BusinessEntityAddress BEA
+	ON BE.BusinessEntityID = BEA.BusinessEntityID JOIN AdventureWorks2014.Person.Address A
+	ON BEA.AddressID = A.AddressID JOIN AdventureWorks2014.Person.PersonPhone PP
+	ON P.BusinessEntityID = PP.BusinessEntityID JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON P.BusinessEntityID = EA.BusinessEntityID
+
+SELECT *
+FROM Kandidati
+
+INSERT INTO Testovi
+VALUES
+('05.06.2015', 'MS Access', 'MSACC1', 'Baze podataka', 50, NULL),
+('06.09.2015', 'SQL Server', 'SQLS1', 'Baze podataka', 70, NULL),
+(GETDATE(), 'ASP.NET', 'ASPNET1', 'Web programiranje', 80, NULL)
+
+SELECT *
+FROM Testovi
+
+--4
+CREATE PROC usp_RezultatiTesta_Insert 
+@Polozio bit,
+@OsvojeniBodovi decimal(8,2),
+@Napomena nvarchar(250) = NULL,
+@KandidatID int,
+@TestID int
+AS
+BEGIN
+INSERT INTO RezultatiTesta
+VALUES(@Polozio, @OsvojeniBodovi, @Napomena, @KandidatID, @TestID)
+END
+
+EXEC usp_RezultatiTesta_Insert 1, 42, DEFAULT, 1, 1
+EXEC usp_RezultatiTesta_Insert 0, 18, DEFAULT, 2, 1
+EXEC usp_RezultatiTesta_Insert 1, 26, DEFAULT, 3, 1
+EXEC usp_RezultatiTesta_Insert 1, 68, DEFAULT, 2, 2
+EXEC usp_RezultatiTesta_Insert 0, 20, DEFAULT, 3, 2
+EXEC usp_RezultatiTesta_Insert 1, 72, DEFAULT, 2, 3
+EXEC usp_RezultatiTesta_Insert 1, 67, DEFAULT, 3, 3
+EXEC usp_RezultatiTesta_Insert 0, 27, DEFAULT, 5, 3
+EXEC usp_RezultatiTesta_Insert 1, 72, DEFAULT, 6, 3
+EXEC usp_RezultatiTesta_Insert 0, 38, DEFAULT, 7, 3
+
+SELECT *
+FROM RezultatiTesta
+
+--5
+CREATE VIEW view_Rezultati_Testiranja AS
+SELECT K.Ime, K.Prezime, K.JMBG, K.Telefon, K.Email,
+	   T.Datum, T.Naziv, T.Oznaka, T.Oblast, T.MaxBrojBodova,
+	   RT.Polozio, RT.OsvojeniBodovi, CONCAT(CONVERT(DECIMAL(8,2),(RT.OsvojeniBodovi/T.MaxBrojBodova)*100),'%') AS 'Osvojeni procenat'
+FROM Kandidati K JOIN RezultatiTesta RT
+	ON K.KandidatID = RT.KandidatID JOIN Testovi T
+	ON RT.TestID = T.TestID
+
+SELECT *
+FROM view_Rezultati_Testiranja
+
+--6
+CREATE PROC usp_RezultatiTesta_SelectByOznaka 
+@OznakaTesta varchar(10),
+@Polozio bit
+AS
+BEGIN
+SELECT *
+FROM view_Rezultati_Testiranja
+WHERE Oznaka = @OznakaTesta AND Polozio = @Polozio
+END
+
+EXEC usp_RezultatiTesta_SelectByOznaka 'ASPNET1', 1
+EXEC usp_RezultatiTesta_SelectByOznaka 'SQLS1', 0
+
+--7
+CREATE PROC usp_RezultatiTesta_Update
+@Polozio bit,
+@OsvojeniBodovi decimal(8,2),
+@Napomena nvarchar(250) = NULL,
+@KandidatID int,
+@TestID int
+AS
+BEGIN
+UPDATE RezultatiTesta 
+SET Polozio = @Polozio,
+	OsvojeniBodovi = @OsvojeniBodovi,
+	Napomena = @Napomena,
+	KandidatID = @KandidatID,
+	TestID = @TestID
+WHERE KandidatID = @KandidatID AND TestID = @TestID
+END
+
+EXEC usp_RezultatiTesta_Update 1, 50, DEFAULT, 1, 1
+EXEC usp_RezultatiTesta_Update 0, 35, DEFAULT, 2, 2
+
+SELECT *
+FROM RezultatiTesta
+
+--8
+CREATE PROC usp_Testovi_Delete
+AS
+BEGIN
+DELETE FROM RezultatiTesta
+DELETE FROM Testovi
+END
+
+
+EXEC usp_Testovi_Delete
+
+--9
+CREATE TRIGGER tr_RezultatiTesta_Delete
+ON RezultatiTesta INSTEAD OF DELETE AS
+BEGIN
+PRINT 'Brisanje nije dozvoljeno u ovoj tabeli'
+END
+
+EXEC usp_Testovi_Delete
+
+--10
+BACKUP DATABASE IB170067_A
+TO  DISK = 'C:\BP2\Backup\IB170067_A.bak'
+
