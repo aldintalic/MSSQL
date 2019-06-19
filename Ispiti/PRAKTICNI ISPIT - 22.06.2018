@@ -1,0 +1,159 @@
+/*PRAKTICNI ISPIT - 22.06.2018*/
+
+--1
+CREATE DATABASE IB170067_D
+
+USE IB170067_D
+
+--A
+CREATE TABLE Otkupljivaci(
+Ime varchar(50) NOT NULL,
+Prezime varchar(50) NOT NULL,
+DatumRodjenja date NOT NULL DEFAULT GETDATE(),
+JMBG varchar(13) NOT NULL,
+Spol char(1) NOT NULL,
+Grad varchar(50) NOT NULL,
+Adresa varchar(100) NOT NULL,
+Email varchar(100) NOT NULL CONSTRAINT UQ_Email UNIQUE,
+Aktivan bit NOT NULL DEFAULT 1
+)
+
+--B
+CREATE TABLE Proizvodi(
+Naziv varchar(50) NOT NULL,
+Sorta varchar(50) NOT NULL,
+OtkupnaCijena decimal(5,2) NOT NULL,
+Opis varchar(255) NULL
+)
+
+--C
+CREATE TABLE OtkupProizvoda(
+Datum date NOT NULL DEFAULT GETDATE(),
+Kolicina decimal(5,2) NOT NULL,
+BrojGajbica int NOT NULL
+)
+
+ALTER TABLE Otkupljivaci
+ADD OtkupljivacID int CONSTRAINT PK_Otkupljivaci PRIMARY KEY
+
+ALTER TABLE Proizvodi
+ADD ProizvodID int CONSTRAINT PK_Proizvodi PRIMARY KEY
+
+ALTER TABLE OtkupProizvoda
+ADD OtkupljivacID int CONSTRAINT FK_OtkupProizvoda_Otkupljivaci FOREIGN KEY REFERENCES Otkupljivaci(OtkupljivacID),
+	ProizvodID int CONSTRAINT FK_OtkupProizvoda_Proizvodi FOREIGN KEY REFERENCES Proizvodi(ProizvodID),
+	CONSTRAINT PK_OtkupProizvoda PRIMARY KEY (OtkupljivacID, ProizvodID, Datum)
+
+--2
+
+--A
+INSERT INTO Otkupljivaci
+SELECT TOP 5 E.FirstName, E.LastName, E.BirthDate, CONCAT(REVERSE(YEAR(E.BirthDate)), DAY(E.BirthDate), MONTH(E.BirthDate), RIGHT(E.HomePhone, 4)),
+	   IIF(E.TitleOfCourtesy LIKE '%s.','F','M'), E.City, REPLACE(E.Address, ' ', '_'), CONCAT(E.FirstName, '_', E.LastName, '@edu.fit.ba'), 1, E.EmployeeID
+FROM NORTHWND.dbo.Employees E
+ORDER BY 3 DESC
+
+SELECT * FROM Otkupljivaci
+
+--B
+INSERT INTO Proizvodi
+SELECT P.ProductName, C.CategoryName, P.UnitPrice, C.Description, P.ProductID
+FROM NORTHWND.dbo.Products P JOIN NORTHWND.dbo.Categories C
+	ON P.CategoryID = C.CategoryID
+
+SELECT *
+FROM Proizvodi
+
+--C
+INSERT INTO OtkupProizvoda 
+
+SELECT O.OrderDate, OD.Quantity * 8, OD.Quantity, O.EmployeeID, OD.ProductID
+FROM NORTHWND.dbo.Orders O JOIN NORTHWND.dbo.[Order Details] OD
+	ON O.OrderID = OD.OrderID 
+WHERE O.EmployeeID IN (SELECT O.OtkupljivacID
+					   FROM Otkupljivaci O 
+					   WHERE O.OtkupljivacID != 8) --ZBOG DUPLICIRANJA VRIJEDNOSTI PRIMARNOG KLJUCA (OtkupljivacID, ProizvodID, Datum)
+
+SELECT *
+FROM OtkupProizvoda
+
+--3
+
+--A
+ALTER TABLE Otkupljivaci
+ALTER COLUMN Adresa varchar(100) NULL
+
+--B
+ALTER TABLE Proizvodi
+ADD TipProizvoda varchar(50) NULL
+
+UPDATE Proizvodi
+SET TipProizvoda = 'Voce'
+WHERE ProizvodID % 2 = 0
+
+SELECT *
+FROM Proizvodi
+
+
+--4
+UPDATE Otkupljivaci
+SET Aktivan = 0
+WHERE Grad != 'London' AND YEAR(DatumRodjenja) >= 1960
+
+SELECT *
+FROM Otkupljivaci
+
+--5
+UPDATE Proizvodi
+SET OtkupnaCijena+=5.45
+WHERE CHARINDEX('/', Sorta, 0) != 0
+ 
+SELECT *
+FROM Proizvodi
+
+--6
+SELECT CONCAT(O.Ime, ' ', O.Prezime) 'Ime i prezime',
+	   P.Naziv 'Naziv',
+	   SUM(OP.Kolicina) 'Količina', SUM(OP.BrojGajbica) 'Broj gajbica'
+FROM Otkupljivaci O JOIN OtkupProizvoda OP
+	ON O.OtkupljivacID = OP.OtkupljivacID JOIN Proizvodi P
+	ON OP.ProizvodID = P.ProizvodID
+GROUP BY CONCAT(O.Ime, ' ', O.Prezime), P.Naziv
+ORDER BY 2, 3 DESC
+
+
+--7
+SELECT TOP 10 P.Naziv, 
+	   CONCAT(ROUND(SUM(P.OtkupnaCijena), 2), ' KM') 'Zarada', 
+	   CONCAT(ROUND(SUM(OP.Kolicina), 2), ' kg') 'Količina'
+FROM OtkupProizvoda OP JOIN Proizvodi P
+	ON OP.ProizvodID = P.ProizvodID
+WHERE OP.Datum >= '1996-12-24' AND OP.Datum <='1997-08-16'
+GROUP BY P.Naziv
+HAVING SUM(OP.Kolicina)>=1000
+ORDER BY SUM(P.OtkupnaCijena) DESC
+
+--8
+SELECT P.Naziv, ISNULL(P.TipProizvoda,'Nije definisan') 'Tip proizvoda', P.Sorta, COUNT(P.ProizvodID) 'Broj otkupljivanja'
+FROM OtkupProizvoda OP JOIN Proizvodi P
+	ON OP.ProizvodID = P.ProizvodID
+GROUP BY P.Naziv, P.TipProizvoda, P.Sorta
+ORDER BY 4 DESC
+
+--9
+SELECT P.Naziv, ISNULL(P.TipProizvoda,'Nije definisan') 'Tip proizvoda', P.Sorta, COUNT(P.ProizvodID) 'Broj otkupljivanja'
+FROM OtkupProizvoda OP JOIN Proizvodi P
+	ON OP.ProizvodID = P.ProizvodID JOIN Otkupljivaci O
+	ON OP.OtkupljivacID = O.OtkupljivacID
+WHERE O.Aktivan = 1 AND O.Spol = 'F' AND YEAR(OP.Datum) = 1997 AND MONTH(OP.Datum) = 8
+GROUP BY P.Naziv, P.TipProizvoda, P.Sorta
+ORDER BY 4 DESC
+
+--10
+DELETE FROM Otkupljivaci
+WHERE Grad = 'Seattle'
+
+SELECT * 
+FROM Otkupljivaci
+
+
