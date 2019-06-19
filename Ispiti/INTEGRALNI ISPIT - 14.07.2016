@@ -1,0 +1,204 @@
+--1
+CREATE DATABASE IB170067_E
+
+USE IB170067_E
+
+--A
+CREATE TABLE Proizvodi(
+ProizvodID int IDENTITY(1,1) CONSTRAINT PK_Proizvodi PRIMARY KEY,
+Sifra nvarchar(10) NOT NULL CONSTRAINT UQ_Sifra UNIQUE,
+Naziv nvarchar(50) NOT NULL,
+Cijena decimal(5,2) NOT NULL
+)
+
+--B
+CREATE TABLE Skladista(
+SkladisteID int IDENTITY(1,1) CONSTRAINT PK_Skladista PRIMARY KEY,
+Naziv nvarchar(50) NOT NULL,
+Oznaka nvarchar(10) NOT NULL CONSTRAINT UQ_Oznaka UNIQUE,
+Lokacija nvarchar(50) NOT NULL
+)
+
+--C
+CREATE TABLE SkladisteProizvodi(
+ProizvodID int CONSTRAINT FK_SkladisteProizvodi_Proizvodi FOREIGN KEY REFERENCES Proizvodi(ProizvodID),
+SkladisteID int CONSTRAINT FK_SkladisteProizvodi_Skladista FOREIGN KEY REFERENCES Skladista(SkladisteID),
+Stanje decimal(5,2) NOT NULL,
+CONSTRAINT PK_SkladisteProizvodi PRIMARY KEY(ProizvodID, SkladisteID)
+)
+
+--2
+
+--A
+INSERT INTO Skladista
+VALUES ('Skladiste-1', 'SKL_1', 'Mostar'),
+	   ('Skladiste-2', 'SKL_2', 'Kakanj'),
+	   ('Skladiste-3', 'SKL_3', 'Tuzla')
+
+
+SELECT *
+FROM Skladista
+
+--B
+INSERT INTO Proizvodi
+SELECT TOP 10 P.ProductNumber, P.Name, CONVERT(decimal(8,2),P.ListPrice)
+FROM AdventureWorks2014.Production.Product P JOIN AdventureWorks2014.Production.ProductSubcategory PSC
+	ON P.ProductSubcategoryID = PSC.ProductSubcategoryID JOIN AdventureWorks2014.Production.ProductCategory PC
+	ON PSC.ProductCategoryID = PC.ProductCategoryID JOIN AdventureWorks2014.Sales.SalesOrderDetail SOD
+	ON P.ProductID = SOD.ProductID
+WHERE PC.Name = 'Bikes'
+GROUP BY P.ProductNumber, P.Name, P.ListPrice
+ORDER BY COUNT(SOD.ProductID) DESC
+
+SELECT *
+FROM Proizvodi
+
+--C
+INSERT INTO SkladisteProizvodi
+SELECT ProizvodID, 1, 100  
+FROM Proizvodi 
+
+INSERT INTO SkladisteProizvodi
+SELECT ProizvodID, 2, 100  
+FROM Proizvodi 
+
+INSERT INTO SkladisteProizvodi
+SELECT ProizvodID, 3, 100  
+FROM Proizvodi 
+
+SELECT * 
+FROM SkladisteProizvodi
+
+--3
+CREATE PROC usp_SkladisteProizvodi_UvecajStanje
+@ProizvodID int,
+@SkladisteID int,
+@Uvecaj decimal(8,2)
+AS
+BEGIN
+UPDATE SkladisteProizvodi
+SET Stanje+=@Uvecaj
+WHERE ProizvodID = @ProizvodID AND SkladisteID = @SkladisteID
+END
+
+EXEC usp_SkladisteProizvodi_UvecajStanje 5, 1, 50
+
+SELECT *
+FROM SkladisteProizvodi
+
+--4
+
+--A
+CREATE NONCLUSTERED INDEX IX_Proizvodi_Sifra_Naziv
+ON Proizvodi(Sifra, Naziv)
+INCLUDE (Cijena)
+
+--B
+SELECT Sifra, Naziv, Cijena
+FROM Proizvodi
+ORDER BY Sifra DESC
+
+--C
+ALTER INDEX IX_Proizvodi_Sifra_Naziv 
+ON Proizvodi DISABLE
+
+
+--5
+CREATE VIEW view_SkladistaProizvodi
+AS
+SELECT P.Sifra, P.Naziv 'Naziv proizvoda', P.Cijena,
+	   S.Oznaka, S.Naziv 'Naziv skladista', S.Lokacija,
+	   SP.Stanje
+FROM Proizvodi P JOIN SkladisteProizvodi SP
+	ON P.ProizvodID = SP.ProizvodID JOIN Skladista S
+	ON SP.SkladisteID = S.SkladisteID
+
+SELECT * 
+FROM view_SkladistaProizvodi
+
+--6
+CREATE PROC usp_SkladistaProizvodi_Stanje
+@Sifra nvarchar(10)
+AS
+BEGIN
+SELECT vSP.Sifra, vSP.[Naziv proizvoda], vSP.Cijena, SUM(vSP.Stanje) 'Ukupno'
+FROM view_SkladistaProizvodi vSP
+WHERE vSP.Sifra = @Sifra
+GROUP BY vSP.Sifra, vSP.[Naziv proizvoda], vSP.Cijena
+END
+
+EXEC usp_SkladistaProizvodi_Stanje 'BK-M68B-38'
+
+--7
+CREATE PROC usp_Proizvodi_Insert
+@Sifra nvarchar(10),
+@Naziv nvarchar(50),
+@Cijena decimal(8,2)
+AS
+BEGIN
+INSERT INTO Proizvodi
+VALUES(@Sifra, @Naziv, @Cijena)
+
+DECLARE @id int = (SELECT ProizvodID FROM Proizvodi WHERE Sifra=@Sifra)
+
+INSERT INTO SkladisteProizvodi
+SELECT @id, SkladisteID, 0
+FROM Skladista
+END
+
+EXEC usp_Proizvodi_Insert 'BE-R79P-L8', 'Road-18SJ Green, 42', 1802.99
+
+SELECT *
+FROM Proizvodi
+
+SELECT *
+FROM SkladisteProizvodi
+
+--8
+CREATE PROC usp_Proizvodi_Delete
+@Sifra nvarchar(10)
+AS
+BEGIN
+DELETE FROM SkladisteProizvodi
+FROM Proizvodi P JOIN SkladisteProizvodi SP
+	ON P.ProizvodID = SP.ProizvodID
+WHERE P.Sifra = @Sifra
+
+DELETE FROM Proizvodi
+WHERE Sifra = @Sifra
+END
+
+EXEC usp_Proizvodi_Delete 'BE-R79P-L8'
+
+--9
+CREATE PROC usp_Proizvodi_Pretraga
+@Sifra nvarchar(10) = NULL,
+@Oznaka nvarchar(10) = NULL,
+@Lokacija nvarchar(50) = NULL
+AS
+
+BEGIN
+SELECT * 
+FROM view_SkladistaProizvodi
+WHERE (@Sifra = Sifra OR @Sifra IS NULL) AND 
+	  (@Oznaka = Oznaka OR @Oznaka IS NULL) AND 
+	  (@Lokacija = Lokacija OR @Lokacija IS NULL)
+END
+
+
+EXEC usp_Proizvodi_Pretraga
+EXEC usp_Proizvodi_Pretraga 'BK-M68B-38'
+EXEC usp_Proizvodi_Pretraga 'BK-M68B-38', 'SKL_1'
+EXEC usp_Proizvodi_Pretraga 'BK-M68B-38', DEFAULT, 'Kakanj'
+EXEC usp_Proizvodi_Pretraga 'BK-M68B-38', 'SKL_2', 'Kakanj'
+
+--10
+BACKUP DATABASE IB170067_E
+TO DISK = 'C:\BP2\Backup\IB170067_E.bak'
+
+BACKUP DATABASE IB170067_E
+TO DISK = 'C:\BP2\Backup\IB170067_E_diff.bak'
+WITH DIFFERENTIAL
+
+
+
