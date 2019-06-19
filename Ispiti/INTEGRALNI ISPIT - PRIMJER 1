@@ -1,0 +1,160 @@
+/*INTEGRALNI ISPIT*/
+
+--1
+CREATE DATABASE IB170067_C
+
+USE IB170067_C
+
+CREATE TABLE Studenti(
+StudentID int IDENTITY(1,1) CONSTRAINT PK_Studenti PRIMARY KEY,
+BrojDosijea nvarchar(10) NOT NULL CONSTRAINT UQ_BrojDosijea UNIQUE,
+Ime nvarchar(35) NOT NULL,
+Prezime nvarchar(35) NOT NULL,
+GodinaStudija int NOT NULL,
+NacinStudiranja nvarchar(10) NOT NULL DEFAULT 'Redovan',
+Email varchar(50) NULL
+)
+
+CREATE TABLE Predmeti(
+PredmetID int IDENTITY(1,1) CONSTRAINT PK_Predmeti PRIMARY KEY,
+Naziv nvarchar(100) NOT NULL,
+Oznaka nvarchar(10) NOT NULL CONSTRAINT UQ_Oznaka UNIQUE
+)
+
+CREATE TABLE Ocjene(
+StudentID int CONSTRAINT FK_Ocjene_Studenti FOREIGN KEY REFERENCES Studenti(StudentId),
+PredmetID int CONSTRAINT FK_Ocjene_Predmeti FOREIGN KEY REFERENCES Predmeti(PredmetID),
+Ocjena int NOT NULL,
+Bodovi decimal(5,2) NOT NULL,
+DatumPolaganja date NOT NULL,
+CONSTRAINT PK_Ocjene PRIMARY KEY (StudentID, PredmetID)
+)
+
+--2
+
+--A
+INSERT INTO Predmeti
+VALUES ('Baze podataka II', 'BP-2'),
+	   ('Programiranje III', 'PR-3'),
+	   ('Algoritmi i strukture podataka', 'ASP'),
+	   ('Diskretna matematika', 'DM'),
+	   ('Programiranje I', 'PR-1')
+
+--B
+INSERT INTO Studenti(BrojDosijea, Ime, Prezime, GodinaStudija, Email) 
+SELECT TOP 9 C.AccountNumber, P.FirstName, P.LastName, 2, EA.EmailAddress 
+FROM AdventureWorks2014.Sales.Customer C JOIN AdventureWorks2014.Person.Person P
+	ON C.PersonID = P.BusinessEntityID JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON P.BusinessEntityID = EA.BusinessEntityID
+
+SELECT *
+FROM Studenti
+
+--3
+CREATE PROC usp_Ocjene_Insert 
+@StudentID int,
+@PredmetID int,
+@Ocjena int,
+@Bodovi decimal(5,2),
+@DatumPolaganja date
+AS
+BEGIN
+INSERT INTO Ocjene
+VALUES(@StudentID, @PredmetID, @Ocjena, @Bodovi, @DatumPolaganja)
+END
+
+EXEC usp_Ocjene_Insert 1, 1, 8, 78, '2018-06-18'
+EXEC usp_Ocjene_Insert 1, 2, 9, 86, '2018-06-20'
+EXEC usp_Ocjene_Insert 5, 5, 5, 50, '2018-06-22'
+EXEC usp_Ocjene_Insert 10, 3, 10, 96, '2018-07-07'
+EXEC usp_Ocjene_Insert 10, 4, 9, 89, '2018-06-15'
+
+SELECT *
+FROM Ocjene
+
+--4
+--IMPORTOVANE 3 TABELE PREKO IMPORT/EXPORT WIZARDA
+
+--5
+
+--A
+CREATE NONCLUSTERED INDEX IX_Person_LastName_FirstName
+ON Person.Person (LastName, FirstName)
+INCLUDE (Title)
+
+--B
+SELECT LastName, FirstName, Title
+FROM Person.Person
+WHERE LastName LIKE '[^A]%'
+ORDER BY LastName, FirstName
+
+--C
+ALTER INDEX IX_Person_LastName_FirstName
+ON Person.Person DISABLE
+
+--D
+CREATE CLUSTERED INDEX IX_CreditCard_CreditCardID
+ON Sales.CreditCard (CreditCardID)
+
+--E
+CREATE NONCLUSTERED INDEX IX_CreditCard_CardNumber
+ON Sales.CreditCard (CardNumber)
+INCLUDE (ExpMonth, ExpYear)
+
+--6
+CREATE VIEW view_Person_CreditCard
+AS
+SELECT P.LastName, P.FirstName, CC.CardNumber, CC.CardType
+FROM Person.Person P JOIN Sales.PersonCreditCard PCC
+	ON P.BusinessEntityID = PCC.BusinessEntityID JOIN Sales.CreditCard CC
+	ON PCC.CreditCardID = CC.CreditCardID
+WHERE CC.CardType = 'Vista' AND P.Title IS NULL
+
+--7
+BACKUP DATABASE IB170067_C
+TO DISK='C:\BP2\Backup\IB170067_C.bak'
+
+BACKUP DATABASE IB170067_C
+TO DISK='C:\BP2\Backup\IB170067_C_dif.bak'
+WITH DIFFERENTIAL
+
+--8
+--DOVRSITI
+
+--9
+CREATE PROC usp_Pretraga_view
+@Ime nvarchar(50) = NULL,
+@Prezime nvarchar(50) = NULL,
+@BrojKartice nvarchar(50) = NULL
+AS
+BEGIN
+SELECT *
+FROM view_Person_CreditCard vPCC
+WHERE (@Ime IS NULL OR @Ime = vPCC.FirstName) AND 
+	  (@Prezime IS NULL OR @Prezime = vPCC.LastName) AND 
+	  (@BrojKartice IS NULL OR @BrojKartice = vPCC.CardNumber)
+END
+
+EXEC usp_Pretraga_view 
+EXEC usp_Pretraga_view DEFAULT, 'Huang', DEFAULT
+EXEC usp_Pretraga_view 'Laura', 'Huang'
+EXEC usp_Pretraga_view 'Laura', 'Huang', '11112693724565'
+
+
+--10
+CREATE PROC usp_CreditCard_Delete
+@CreditCardID int
+AS
+BEGIN
+
+DELETE FROM Sales.PersonCreditCard
+WHERE CreditCardID = @CreditCardID
+
+DELETE FROM Sales.CreditCard
+WHERE CreditCardID = @CreditCardID
+END
+
+EXEC usp_CreditCard_Delete 1
+EXEC usp_CreditCard_Delete 56
+
+
