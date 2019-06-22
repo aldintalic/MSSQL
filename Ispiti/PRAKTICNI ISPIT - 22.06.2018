@@ -66,13 +66,16 @@ FROM Proizvodi
 
 --C
 INSERT INTO OtkupProizvoda 
-
-SELECT O.OrderDate, OD.Quantity * 8, OD.Quantity, O.EmployeeID, OD.ProductID
+SELECT O.OrderDate, SUM(OD.Quantity)*8 , SUM(OD.Quantity), O.EmployeeID, OD.ProductID
 FROM NORTHWND.dbo.Orders O JOIN NORTHWND.dbo.[Order Details] OD
 	ON O.OrderID = OD.OrderID 
 WHERE O.EmployeeID IN (SELECT O.OtkupljivacID
-					   FROM Otkupljivaci O 
-					   WHERE O.OtkupljivacID != 8) --ZBOG DUPLICIRANJA VRIJEDNOSTI PRIMARNOG KLJUCA (OtkupljivacID, ProizvodID, Datum)
+					   FROM Otkupljivaci O )
+GROUP BY O.OrderDate, O.EmployeeID, OD.ProductID
+
+SELECT *
+FROM Otkupljivaci
+
 
 SELECT *
 FROM OtkupProizvoda
