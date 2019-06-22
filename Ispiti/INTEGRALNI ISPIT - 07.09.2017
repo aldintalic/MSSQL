@@ -1,0 +1,214 @@
+--1
+CREATE DATABASE IB170067_H
+
+USE IB170067_H
+
+--A
+CREATE TABLE Klijenti(
+Ime varchar(50) NOT NULL,
+Prezime varchar(50) NOT NULL,
+Grad varchar(50) NOT NULL,
+Email varchar(50) NOT NULL,
+Telefon varchar(50) NOT NULL
+)
+
+--B
+CREATE TABLE Racuni(
+DatumOtvaranja date NOT NULL,
+TipRacuna varchar(50) NOT NULL,
+BrojRacuna varchar(16) NOT NULL,
+Stanje decimal(8,2) NOT NULL
+)
+
+--C
+CREATE TABLE Transakcije(
+Datum datetime NOT NULL,
+Primatelj varchar(50) NOT NULL,
+BrojRacunaPrimatelja varchar(16) NOT NULL,
+MjestoPrimatelja varchar(50) NOT NULL,
+AdresaPrimatelja varchar(50) NULL,
+Svrha varchar(200) NULL,
+Iznos decimal(8,2) NOT NULL
+)
+
+ALTER TABLE Klijenti
+ADD KlijentID int IDENTITY(1,1) CONSTRAINT PK_Kupci PRIMARY KEY
+
+ALTER TABLE Racuni
+ADD RacunID int IDENTITY(1,1) CONSTRAINT PK_Racuni PRIMARY KEY,
+	KlijentID int CONSTRAINT FK_Racuni_Klijenti FOREIGN KEY REFERENCES Klijenti(KlijentID)
+
+ALTER TABLE Transakcije
+ADD TransakcijaID int IDENTITY(1,1) CONSTRAINT PK_Transakcije PRIMARY KEY,
+	RacunID int CONSTRAINT FK_Transakcije_Racuni FOREIGN KEY REFERENCES Racuni(RacunID)
+
+--2
+ALTER TABLE Klijenti
+ADD CONSTRAINT UQ_Email UNIQUE(Email)
+
+--3
+CREATE PROC usp_Racuni_Insert
+@DatumOtvaranja date,
+@TipRacuna varchar(50),
+@BrojRacuna varchar(16),
+@Stanje decimal(8,2),
+@KlijentID int
+AS
+
+BEGIN
+INSERT INTO Racuni
+VALUES(@DatumOtvaranja, @TipRacuna, @BrojRacuna, @Stanje, @KlijentID)
+END
+
+INSERT INTO Klijenti
+VALUES('Rafael', 'Nadal', 'Madrid', 'vamos_rafa@gmail.com', '0281-12-333-123')
+
+EXEC usp_Racuni_Insert '2018-06-02', 'Tekuci', '1234567890176172', 683.20, 1
+
+SELECT *
+FROM Racuni
+
+--4
+--A
+INSERT INTO Klijenti
+SELECT DISTINCT LEFT(C.ContactName,CHARINDEX(' ', C.ContactName)-1), 
+       RIGHT(C.ContactName, LEN(C.ContactName)-CHARINDEX(' ', C.ContactName)),
+	   C.City,
+	   CONCAT(LEFT(C.ContactName,CHARINDEX(' ', C.ContactName)-1),'.', RIGHT(C.ContactName, LEN(C.ContactName)-CHARINDEX(' ', C.ContactName)), '@northwind.ba'),
+	   C.Phone
+FROM NORTHWND.dbo.Customers C JOIN NORTHWND.dbo.Orders O
+	ON C.CustomerID = O.CustomerID
+WHERE YEAR(O.OrderDate) = 1996
+
+--B
+SELECT *
+FROM Racuni
+
+EXEC usp_Racuni_Insert '2018-01-11', 'Tekuci', '6025780406569650', 2456.20, 6
+EXEC usp_Racuni_Insert '2017-02-12', 'Devizni', '4735639264756680', 275.90, 1
+EXEC usp_Racuni_Insert '2017-06-17', 'Stedni', '6312729681054659', 1083.10, 12
+EXEC usp_Racuni_Insert '2014-08-22', 'Tekuci', '6578471084709418', 1750.00, 12
+EXEC usp_Racuni_Insert '2012-08-05', 'Stedni', '1242750495979831', 1100.90, 7
+EXEC usp_Racuni_Insert '2010-08-30', 'Stedni', '8925042862071013', 573.00, 8
+EXEC usp_Racuni_Insert '2019-09-16', 'Tekuci', '9577117928962041', 331.20, 20
+EXEC usp_Racuni_Insert '2019-01-09', 'Tekuci', '5745689962432325', 2144.15, 7
+EXEC usp_Racuni_Insert '2019-04-10', 'Devizni', '3229812650161732', 439.86, 6
+EXEC usp_Racuni_Insert '2019-11-11', 'Devizni', '6517339391332595', 2370.99, 8
+
+
+--C
+INSERT INTO Transakcije
+SELECT TOP 10 O.OrderDate, O.ShipName, CONCAT(O.OrderID, '00000123456'), O.ShipCity, O.ShipAddress,
+	  NULL, OD.UnitPrice*(1-OD.Discount)*Quantity,22
+FROM NORTHWND.dbo.Orders O JOIN NORTHWND.dbo.[Order Details] OD
+	ON O.OrderID = OD.OrderID
+ORDER BY NEWID()
+
+SELECT *
+FROM Transakcije
+
+--5
+-- I NACIN
+UPDATE Racuni 
+SET Stanje+=500
+FROM Klijenti K JOIN Racuni R
+	ON K.KlijentID = R.KlijentID
+WHERE K.Grad = 'Leipzig' AND MONTH(R.DatumOtvaranja)=8
+
+-- II NACIN
+UPDATE Racuni
+SET Stanje+=500
+WHERE MONTH(DatumOtvaranja) = 8 AND KlijentID IN (SELECT KlijentID
+												 FROM Klijenti
+												 WHERE Grad='Leipzig')
+
+SELECT *
+FROM Racuni
+
+--6
+CREATE VIEW view_Klijenti_Racuni_Transakcije
+AS
+SELECT CONCAT(K.Ime, ' ', K.Prezime) 'Ime i prezime', K.Grad, K.Email, K.Telefon,
+	   R.TipRacuna, R.BrojRacuna, R.Stanje, 
+	   T.Primatelj, T.BrojRacunaPrimatelja, T.Iznos
+FROM Klijenti K LEFT JOIN Racuni R	
+	ON K.KlijentID = R.KlijentID LEFT JOIN Transakcije T
+	ON R.RacunID = T.RacunID
+
+--7
+CREATE PROC usp_PrikaziPodatkeOVlasniku
+@BrojRacuna varchar(16) = NULL
+AS
+BEGIN
+SELECT ISNULL([Ime i prezime],'N/A') 'Ime i prezime', 
+	   ISNULL(Grad,'N/A') 'Grad', 
+	   ISNULL(Telefon,'N/A') 'Telefon',
+	   ISNULL(BrojRacuna,'N/A') 'Broj racuna', 
+	   ISNULL(CONVERT(varchar,Stanje),'N/A') 'Stanje', 
+	   ISNULL(CONVERT(varchar,SUM(Iznos)),'N/A') 'Ukupno'
+FROM view_Klijenti_Racuni_Transakcije 
+WHERE BrojRacuna=@BrojRacuna OR @BrojRacuna IS NULL
+GROUP BY ISNULL([Ime i prezime],'N/A'), ISNULL(Grad,'N/A'), ISNULL(Telefon,'N/A'),
+	   ISNULL(BrojRacuna,'N/A'), ISNULL(CONVERT(varchar,Stanje),'N/A')
+END
+
+EXEC usp_PrikaziPodatkeOVlasniku '3229812650161732'
+EXEC usp_PrikaziPodatkeOVlasniku '1234567890176172'
+
+--8
+CREATE PROC usp_Klijenti_Racuni_Delete
+@KlijentID int
+AS
+BEGIN
+DELETE FROM Transakcije
+WHERE RacunID IN (SELECT RacunID
+				  FROM Racuni 
+				  WHERE KlijentID = @KlijentID)
+
+DELETE FROM Racuni
+WHERE KlijentID = @KlijentID
+
+DELETE FROM Klijenti
+WHERE KlijentID = @KlijentID 
+END
+
+EXEC usp_Klijenti_Racuni_Delete 12
+
+SELECT *
+FROM Transakcije
+
+SELECT *
+FROM Racuni
+
+SELECT *
+FROM Klijenti
+
+--9
+CREATE PROC usp_Racuni_Update
+@Grad varchar(50),
+@Mjesec int,
+@IznosUvecanja decimal(8,2)
+AS
+BEGIN
+UPDATE Racuni 
+SET Stanje+=@IznosUvecanja
+FROM Klijenti K JOIN Racuni R
+	ON K.KlijentID = R.KlijentID
+WHERE K.Grad = @Grad AND MONTH(R.DatumOtvaranja)=@Mjesec
+END
+
+
+EXEC usp_Racuni_Update 'Leipzig', 8, 250.50
+
+SELECT *
+FROM Racuni
+
+
+--10
+BACKUP DATABASE IB170067_H
+TO DISK='C:\BP2\Backup\IB170067_H.bak'
+
+BACKUP DATABASE IB170067_H
+TO DISK='C:\BP2\Backup\IB170067_H.diff'
+WITH DIFFERENTIAL
+
