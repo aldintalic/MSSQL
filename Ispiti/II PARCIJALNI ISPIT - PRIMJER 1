@@ -1,0 +1,132 @@
+/*II PARCIJALNI ISPIT - PRIMJER*/
+
+--1
+CREATE DATABASE IB170067_G
+
+USE IB170067_G
+
+--2
+--IMPORT/EXPORT ALAT....
+
+--3
+--A
+CREATE NONCLUSTERED INDEX IX_LastName_FirstName_Person 
+ON Person.Person (LastName, FirstName) 
+INCLUDE (Title)
+
+--B
+SELECT LastName, FirstName
+FROM Person.Person
+WHERE Title IS NOT NULL
+
+--C
+ALTER INDEX IX_LastName_FirstName_Person 
+ON Person.Person DISABLE
+
+--D
+CREATE CLUSTERED INDEX IX_CreditCardID_CreditCard 
+ON Sales.CreditCard (CreditCardID)
+
+--E
+CREATE NONCLUSTERED INDEX IX_CardNumber_CreditCard
+ON Sales.CreditCard (CardNumber)
+INCLUDE (ExpMonth, ExpYear)
+
+--4
+CREATE VIEW view_Person_Card
+AS
+SELECT P.LastName, P.FirstName, 
+	   CC.CardNumber, CC.CardType
+FROM Person.Person P JOIN Sales.PersonCreditCard PCC
+	ON P.BusinessEntityID = PCC.BusinessEntityID JOIN Sales.CreditCard CC
+	ON PCC.CreditCardID = CC.CreditCardID
+WHERE CC.CardType='Vista' AND P.Title IS NULL
+
+--5
+CREATE PROC usp_Person_LastName_Update
+@BusinessEntityID int,
+@LastName nvarchar(50)
+AS
+BEGIN
+UPDATE Person.Person
+SET LastName=@LastName
+WHERE BusinessEntityID = @BusinessEntityID
+END
+
+EXEC usp_Person_LastName_Update 2, 'Cooper'
+
+SELECT *
+FROM Person.Person
+
+--6
+BACKUP DATABASE IB170067_G
+TO DISK='C:\BP2\Backup\IB170067_G.bak'
+
+BACKUP DATABASE IB170067_G
+TO DISK='C:\BP2\Backup\IB170067_G.diff'
+WITH DIFFERENTIAL
+
+--7
+--DOVRSITI--
+
+--8
+ALTER PROC usp_Pretraga
+@LastName nvarchar(50) = NULL,
+@FirstName nvarchar(50) = NULL,
+@CardNumber nvarchar(25) = NULL
+AS
+BEGIN
+SELECT *
+FROM view_Person_Card
+WHERE (LastName LIKE @LastName + '%' OR @LastName IS NULL) AND
+	  (FirstName LIKE @FirstName +'%' OR @FirstName IS NULL) AND
+	  (CardNumber = @CardNumber OR @CardNumber IS NULL)
+END
+
+EXEC usp_Pretraga 
+EXEC usp_Pretraga 'Tang'
+EXEC usp_Pretraga 'Tang', 'Warren'
+EXEC usp_Pretraga 'Tang', 'Warren', '11111516664744'
+
+SELECT *
+FROM view_Person_Card
+
+--9
+CREATE PROC usp_CreditCard_Delete
+@CardNumber nvarchar(25)
+AS
+BEGIN
+DELETE FROM Sales.PersonCreditCard 
+WHERE CreditCardID = (SELECT CC.CreditCardID
+					 FROM Sales.CreditCard CC
+					 WHERE CC.CardNumber = @CardNumber)
+
+DELETE FROM Sales.CreditCard
+WHERE CardNumber = @CardNumber
+END
+
+EXEC usp_CreditCard_Delete '33332664695310'
+
+
+SELECT *
+FROM Sales.PersonCreditCard
+
+SELECT *
+FROM Sales.CreditCard
+
+--10
+CREATE TRIGGER trigger_Delete
+ON Sales.PersonCreditCard INSTEAD OF DELETE 
+AS
+BEGIN
+SELECT d.BusinessEntityID 'PersonID', d.CreditCardID 'CreditCardID',
+	   GETDATE() 'Datum i vrijeme', USER 'Korisnik'
+FROM deleted d
+PRINT('Nije dozvoljeno brisanje u tabeli PersonCreditCard')
+END
+
+DELETE FROM Sales.PersonCreditCard 
+WHERE BusinessEntityID=293
+
+
+
