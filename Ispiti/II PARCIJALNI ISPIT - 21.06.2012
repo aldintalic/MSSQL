@@ -1,0 +1,120 @@
+/*II PARCIJALNI ISPIT*/
+
+--1
+CREATE DATABASE IB170067_F
+
+USE IB170067_F
+
+--2
+
+CREATE TABLE Kupci(
+KupacID int IDENTITY(1,1) CONSTRAINT PK_Kupci PRIMARY KEY,
+Ime nvarchar(35) NOT NULL,
+Prezime nvarchar(35) NOT NULL,
+JMBG nvarchar(13) NOT NULL,
+DatumRegistracije datetime NULL
+)
+
+CREATE TABLE Proizvodi(
+ProizvodID int IDENTITY(1,1) CONSTRAINT PK_Proizvodi PRIMARY KEY,
+Naziv nvarchar(35) NOT NULL
+)
+
+
+CREATE TABLE Narudzbe(
+NarudzbaID int IDENTITY(1,1) CONSTRAINT PK_Narudzbe PRIMARY KEY,
+KupacID int CONSTRAINT FK_Narudzbe_Kupci FOREIGN KEY REFERENCES Kupci(KupacID),
+ProizvodID int CONSTRAINT FK_Narudzbe_Proizvodi FOREIGN KEY REFERENCES Proizvodi(ProizvodID),
+DatumNarudzbe datetime NOT NULL,
+Kolicina int NOT NULL,
+Cijena int NOT NULL
+)
+
+
+--3
+INSERT INTO Kupci
+VALUES('Rafael', 'Nadal', '1234567891011', GETDATE())
+
+INSERT INTO Proizvodi
+VALUES('Teniski reket')
+
+--4
+SELECT FirstName, LastName, LEFT(rowguid,13) 'JMBG', GETDATE() 'Datum' INTO #TempIB170067
+FROM AdventureWorks2014.Person.Person
+WHERE Title IS NOT NULL AND MiddleName IS NOT NULL
+
+SELECT *
+FROM #TempIB170067
+
+--5
+INSERT INTO Kupci
+SELECT *
+FROM #TempIB170067
+
+--A
+INSERT INTO Narudzbe
+SELECT KupacID, (SELECT ProizvodID FROM Proizvodi WHERE Naziv='Teniski reket'), GETDATE(), 2, 1200
+FROM Kupci
+
+SELECT *
+FROM Narudzbe
+
+--6
+CREATE VIEW view_kupciNarudzbe
+AS
+SELECT K.Ime, K.Prezime, 
+	   P.Naziv, N.DatumNarudzbe,
+	   SUM(N.Cijena*N.Kolicina) 'Ukupno'
+FROM Kupci K JOIN Narudzbe N
+	ON K.KupacID = N.KupacID JOIN Proizvodi P
+	ON N.ProizvodID = P.ProizvodID
+GROUP BY K.Ime, K.Prezime, P.Naziv, N.DatumNarudzbe
+
+--7
+CREATE PROC usp_KupciUpdate
+@KupacID int,
+@Ime nvarchar(35),
+@Prezime nvarchar(35),
+@JMBG nvarchar(13),
+@DatumRegistracije datetime
+AS
+BEGIN
+UPDATE Kupci
+SET Ime=@Ime, Prezime=@Prezime, JMBG=@JMBG, DatumRegistracije=@DatumRegistracije
+WHERE KupacID=@KupacID
+END
+
+--8
+EXEC usp_KupciUpdate 1, 'Rafael', 'Nadal', '0001112223334', '2018-06-20'
+
+SELECT *
+FROM Kupci
+WHERE Ime='Rafael'
+
+--9
+CREATE PROC usp_KupciDelete
+@KupacID int
+AS
+BEGIN
+DELETE FROM Kupci
+WHERE KupacID=@KupacID
+END
+
+EXEC usp_KupciDelete 2
+
+--10
+ALTER PROC usp_KupciDelete
+@KupacID int
+AS
+BEGIN
+DELETE FROM Narudzbe
+WHERE KupacID=@KupacID
+
+DELETE FROM Kupci
+WHERE KupacID=@KupacID
+END
+
+EXEC usp_KupciDelete 2
+
+SELECT *
+FROM Kupci
