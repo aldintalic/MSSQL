@@ -1,0 +1,247 @@
+--1
+CREATE DATABASE IB170067_I
+
+USE IB170067_I
+
+--2a
+CREATE TABLE Autori(
+AutorID nvarchar(11) CONSTRAINT PK_Autori PRIMARY KEY,
+Prezime varchar(25) NOT NULL,
+Ime nvarchar(25) NOT NULL,
+Telefon nvarchar(20) DEFAULT NULL,
+DatumKreiranjaZapisa date NOT NULL DEFAULT GETDATE(),
+DatumModifikovanjaZapisa date DEFAULT NULL
+)
+
+CREATE TABLE Izdavaci(
+IzdavacID nvarchar(4) CONSTRAINT PK_Izdavaci PRIMARY KEY,
+Naziv nvarchar(100) NOT NULL CONSTRAINT UQ_Naziv UNIQUE,
+Biljeske nvarchar(1000) DEFAULT 'Lorem ipsum',
+DatumKreiranjaZapisa date NOT NULL DEFAULT GETDATE(),
+DatumModifikovanjaZapisa date DEFAULT NULL
+)
+
+CREATE TABLE Naslovi(
+NaslovID nvarchar(6) CONSTRAINT PK_Naslovi PRIMARY KEY,
+IzdavacID nvarchar(4) CONSTRAINT FK_Naslovi_Izdavaci FOREIGN KEY REFERENCES Izdavaci(IzdavacID),
+Naslov nvarchar(100) NOT NULL,
+Cijena money,
+DatumIzdavanja date NOT NULL DEFAULT GETDATE(),
+DatumKreiranjaZapisa date NOT NULL DEFAULT GETDATE(),
+DatumModifikovanjaZapisa date DEFAULT NULL
+)
+
+CREATE TABLE NasloviAutori(
+AutorID nvarchar(11) CONSTRAINT FK_NasloviAutori_Autori FOREIGN KEY REFERENCES Autori(AutorID),
+NaslovID nvarchar(6) CONSTRAINT FK_NasloviAutori_Naslovi FOREIGN KEY REFERENCES Naslovi(NaslovID),
+DatumKreiranjaZapisa date NOT NULL DEFAULT GETDATE(),
+DatumModifikovanjaZapisa date DEFAULT NULL,
+CONSTRAINT PK_NasloviAutori PRIMARY KEY (AutorID, NaslovID)
+)
+
+--2b
+INSERT INTO Autori(AutorID, Prezime, Ime, Telefon)
+SELECT au_id, au_lname, au_fname, phone
+FROM pubs.dbo.authors
+ORDER BY NEWID()
+
+SELECT *
+FROM Autori
+
+INSERT INTO Izdavaci(IzdavacID, Naziv, Biljeske)
+SELECT P.pub_id, P.pub_name, CONVERT(nvarchar(100),I.pr_info)
+FROM pubs.dbo.publishers P JOIN pubs.dbo.pub_info I
+	ON P.pub_id = I.pub_id
+ORDER BY NEWID()
+
+SELECT *
+FROM Izdavaci
+
+INSERT INTO Naslovi(NaslovID, IzdavacID, Naslov, Cijena, DatumIzdavanja)
+SELECT title_id, pub_id, title, price, pubdate
+FROM pubs.dbo.titles
+
+SELECT *
+FROM Naslovi
+
+INSERT INTO NasloviAutori(AutorID, NaslovID)
+SELECT au_id, title_id
+FROM pubs.dbo.titleauthor
+
+SELECT *
+FROM NasloviAutori
+
+--2c
+CREATE TABLE Gradovi(
+GradID int IDENTITY(5,5) CONSTRAINT PK_Gradovi PRIMARY KEY,
+Naziv nvarchar(100) NOT NULL CONSTRAINT UQ_NazivGrad UNIQUE,
+DatumKreiranjaZapisa date NOT NULL DEFAULT GETDATE(),
+DatumModifikovanjaZapisa date DEFAULT NULL
+)
+
+INSERT INTO Gradovi(Naziv)
+SELECT DISTINCT city
+FROM pubs.dbo.authors
+
+SELECT *
+FROM Gradovi
+
+ALTER TABLE Autori
+ADD GradID int CONSTRAINT FK_Autori_Gradovi FOREIGN KEY REFERENCES Gradovi(GradID)
+
+--2d
+CREATE PROC usp_Autori_SanFrancisco
+@NazivGrada nvarchar(100)
+AS
+BEGIN
+UPDATE Autori
+SET GradID = (SELECT GradID
+			  FROM Gradovi
+			  WHERE Naziv = @NazivGrada)
+WHERE AutorID IN (SELECT TOP 10 AutorID
+				  FROM Autori)
+END
+
+EXEC usp_Autori_SanFrancisco 'San Francisco'
+
+CREATE PROC usp_Autori_Berkeley
+@Berkeley nvarchar(100)
+AS
+BEGIN
+DECLARE @SanFrancisco int = (SELECT GradID FROM Gradovi WHERE Naziv = 'San Francisco')
+
+UPDATE Autori
+SET GradID = (SELECT GradID FROM Gradovi WHERE Naziv = @Berkeley)
+WHERE AutorID IN ( SELECT AutorID FROM Autori WHERE GradID IS NULL OR GradID != @SanFrancisco)
+END
+
+EXEC usp_Autori_Berkeley 'Berkeley'
+
+SELECT *
+FROM Autori
+
+--3
+CREATE VIEW view_AutoriNaslovi
+AS
+SELECT CONCAT(A.Prezime, ' ', A.Ime) 'Ime i prezime', G.Naziv 'Grad', 
+	   N.Naslov, N.Cijena, I.Naziv 'Izdavac', I.Biljeske 
+FROM Autori A JOIN NasloviAutori NA	
+	ON A.AutorID = NA.AutorID JOIN Naslovi N
+	ON NA.NaslovID = N.NaslovID JOIN Gradovi G
+	ON A.GradID = G.GradID JOIN Izdavaci I
+	ON N.IzdavacID = I.IzdavacID
+WHERE (N.Cijena IS NOT NULL AND N.Cijena > 10) AND I.Naziv LIKE '%&%' AND G.Naziv='San Francisco'
+
+SELECT *
+FROM view_AutoriNaslovi
+
+--4
+ALTER TABLE Autori
+ADD Email nvarchar(100) DEFAULT NULL
+
+--5
+CREATE PROC usp_Autori_Mail_Francisco
+AS
+BEGIN
+DECLARE @Francisco int = (SELECT GradID FROM Gradovi WHERE Naziv = 'San Francisco')
+
+UPDATE Autori 
+SET Email = (SELECT CONCAT(Ime, '.', Prezime, '@fit.ba')
+			 FROM Autori A
+			 WHERE Autori.AutorID = A.AutorID )
+WHERE GradID = @Francisco
+END
+
+EXEC usp_Autori_Mail_Francisco
+
+
+CREATE PROC usp_Autori_Mail_Berkeley
+AS
+BEGIN
+DECLARE @Berkeley int = (SELECT GradID FROM Gradovi WHERE Naziv = 'Berkeley')
+
+UPDATE Autori 
+SET Email = (SELECT CONCAT(Prezime, '.', Ime, '@fit.ba')
+			 FROM Autori A
+			 WHERE Autori.AutorID = A.AutorID )
+WHERE GradID = @Berkeley
+END
+
+EXEC usp_Autori_Mail_Berkeley
+
+SELECT *
+FROM Autori
+
+
+--6
+SELECT ISNULL(P.Title, 'N/A') 'Title', P.LastName, P.FirstName, EA.EmailAddress, PP.PhoneNumber, CC.CardNumber,
+	   CONCAT(P.FirstName, '.', P.LastName) 'Username', REPLACE(LEFT(NEWID(), 16), '-', 7) 'Password' INTO #tempTabela
+FROM AdventureWorks2014.Person.Person P JOIN AdventureWorks2014.Person.EmailAddress EA
+	ON P.BusinessEntityID = EA.BusinessEntityID JOIN AdventureWorks2014.Person.PersonPhone PP
+	ON P.BusinessEntityID = PP.BusinessEntityID LEFT JOIN AdventureWorks2014.Sales.PersonCreditCard PCC
+	ON P.BusinessEntityID = PCC.BusinessEntityID LEFT JOIN AdventureWorks2014.Sales.CreditCard CC
+	ON PCC.CreditCardID = CC.CreditCardID
+ORDER BY LastName, FirstName
+
+SELECT *
+FROM #tempTabela
+
+--7
+CREATE NONCLUSTERED INDEX IX_temp_UserName
+ON #tempTabela (UserName)
+INCLUDE (LastName, FirstName)
+
+SELECT FirstName, LastName, Username
+FROM #tempTabela
+WHERE LastName LIKE '[ABCDE]%' AND LEN(FirstName) < 15
+
+--8
+CREATE PROC usp_tempTabela_Delete
+AS
+BEGIN
+DELETE FROM #tempTabela
+WHERE CardNumber IS NULL
+END
+
+EXEC usp_tempTabela_Delete
+
+SELECT *
+FROM #tempTabela
+
+
+--9
+BACKUP DATABASE IB170067_I
+TO DISK='C:\BP2\Backup\IB170067_I.bak'
+
+DROP TABLE #tempTabela
+
+--10a
+CREATE PROC usp_Delete_all
+AS
+BEGIN
+--I NACIN
+
+--DELETE FROM NasloviAutori
+--DELETE FROM Naslovi
+--DELETE FROM Autori
+--DELETE FROM Gradovi
+--DELETE FROM Izdavaci
+
+--II NACIN
+
+--disable constraints
+EXEC sp_MSforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL'
+--delete all
+EXEC sp_MSforeachtable 'DELETE FROM ?'
+--enable constraints
+EXEC sp_MSforeachtable 'ALTER TABLE ? CHECK CONSTRAINT ALL'
+END
+
+
+BEGIN TRANSACTION
+EXEC usp_Delete_all
+COMMIT TRANSACTION
+
+--10b
+RESTORE DATABASE IB170067_I_Kopija
+FROM DISK='C:\BP2\Backup\IB170067_I.bak'
